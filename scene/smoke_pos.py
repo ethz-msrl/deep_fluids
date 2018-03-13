@@ -20,15 +20,16 @@ parser.add_argument("--p0", type=str, default='src_x_pos')
 parser.add_argument("--p1", type=str, default='frames')
 
 num_p = 2
-num_sim = num_p*100
+num_f = 200
+num_sim = num_p*num_f
 parser.add_argument("--num_src_x_pos", type=int, default=num_p)
 parser.add_argument("--min_src_x_pos", type=float, default=0.2)
 parser.add_argument("--max_src_x_pos", type=float, default=0.8)
 parser.add_argument("--src_y_pos", type=float, default=0.1)
 parser.add_argument("--src_radius", type=float, default=0.08)
-parser.add_argument("--num_frames", type=int, default=100)
+parser.add_argument("--num_frames", type=int, default=num_f)
 parser.add_argument("--min_frames", type=int, default=0)
-parser.add_argument("--max_frames", type=int, default=99)
+parser.add_argument("--max_frames", type=int, default=num_f-1)
 parser.add_argument("--num_simulations", type=int, default=num_sim)
 
 parser.add_argument("--resolution_x", type=int, default=96)
@@ -36,8 +37,9 @@ parser.add_argument("--resolution_y", type=int, default=128)
 parser.add_argument("--buoyancy", type=float, default=-4e-3)
 parser.add_argument("--bWidth", type=int, default=1)
 parser.add_argument("--open_bound", type=bool, default=False)
-parser.add_argument("--time_step", type=float, default=1.0)
-parser.add_argument("--clamp_mode", type=int, default=1)
+parser.add_argument("--time_step", type=float, default=0.5)
+parser.add_argument("--clamp_mode", type=int, default=2)
+parser.add_argument("--strength", type=float, default=0.1)
 
 args = parser.parse_args()
 
@@ -122,6 +124,10 @@ def main():
 							   openBounds=args.open_bound, boundaryWidth=args.bWidth, clampMode=args.clamp_mode)
 			advectSemiLagrange(flags=flags, vel=vel, grid=vel,     order=2,
 							   openBounds=args.open_bound, boundaryWidth=args.bWidth, clampMode=args.clamp_mode)
+
+			if args.strength > 0:
+				vorticityConfinement(vel=vel, flags=flags, strength=args.strength)
+
 			setWallBcs(flags=flags, vel=vel)
 			addBuoyancy(density=density, vel=vel, gravity=buoyancy, flags=flags)
 			solvePressure(flags=flags, vel=vel, pressure=pressure, cgMaxIterFac=10.0, cgAccuracy=0.0001)
