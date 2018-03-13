@@ -23,7 +23,7 @@ net_arg.add_argument('--filters', type=int, default=128,
 net_arg.add_argument('--l1_weight', type=float, default=1.0)
 net_arg.add_argument('--w1', type=float, default=1.0)
 net_arg.add_argument('--w2', type=float, default=1.0)
-net_arg.add_argument('--w_adv', type=float, default=0.01)
+net_arg.add_argument('--w_adv', type=float, default=0.001)
 net_arg.add_argument('--use_jaco', type=str2bool, default=True)
 net_arg.add_argument('--archi', type=str, default='de', choices=['de', 'dg'])
 

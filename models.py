@@ -33,21 +33,21 @@ def GeneratorBE(z, filters, output_shape, name='G',
     variables = tf.contrib.framework.get_variables(vs)
     return out, variables
 
-def DiscriminatorPatch(x, hidden_num, data_format, name='D', train=True, reuse=False):
+def DiscriminatorPatch(x, filters, name='D', train=True, reuse=False):
     with tf.variable_scope(name, reuse=reuse) as vs:
         repeat_num = 3 # if c4k3s2, rfs 95, w/16=8, if c3k3s2, rfs 47, w/8=16
-        d = int(hidden_num/2)
+        d = int(filters/2)
         for _ in range(repeat_num): 
-            x = conv2d(x, d, data_format, k=3, act=lrelu) # 64/32/16-64/128/256
+            x = conv2d(x, d, k=3, act=lrelu) # 64/32/16-64/128/256
             d *= 2
-        x = conv2d(x, d, data_format, k=3, s=1, act=lrelu) # 16x16x512
-        out = conv2d(x, 1, data_format, k=3, s=1) # 16x16x1
+        x = conv2d(x, d, k=3, s=1, act=lrelu) # 16x16x512
+        out = conv2d(x, 1, k=3, s=1) # 16x16x1
 
-        x = conv2d(x, int(d/2), data_format, k=3, s=2, act=lrelu) # 8x8x256
-        b = get_conv_shape(x, data_format)[0]
-        flat = tf.reshape(x, [b, -1])
+        # x = conv2d(x, int(d/2), k=3, s=2, act=lrelu) # 8x8x256
+        # b = get_conv_shape(x)[0]
+        # flat = tf.reshape(x, [b, -1])
     variables = tf.contrib.framework.get_variables(vs)    
-    return out, flat, variables
+    return out, None, variables
 
 def main(_):
     b_num = 8

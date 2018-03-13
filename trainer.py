@@ -22,6 +22,8 @@ class Trainer(object):
             self.x_jaco, self.x_vort = jacobian(self.x)
         self.output_shape = get_conv_shape(self.x)[1:]
 
+        self.is_3d = config.is_3d
+        self.archi = config.archi
         self.res_x = config.res_x
         self.res_y = config.res_y
         self.res_z = config.res_z
@@ -31,14 +33,17 @@ class Trainer(object):
         self.filters = config.filters
         self.w1 = config.w1
         self.w2 = config.w2
+        self.use_j = config.use_jaco
+        self.w_adv = config.w_adv
 
         self.optimizer = config.optimizer
         self.beta1 = config.beta1
         self.beta2 = config.beta2
         self.g_lr = tf.Variable(config.g_lr, name='g_lr')
-        self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_lower_boundary), name='g_lr_update')
-        # self.d_lr = tf.Variable(config.d_lr, name='d_lr')
-        # self.d_lr_update = tf.assign(self.d_lr, tf.maximum(self.d_lr * 0.5, config.lr_lower_boundary), name='d_lr_update')
+        self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_lower_boundary), name='g_lr_update')        
+        if self.archi == 'dg':
+            self.d_lr = tf.Variable(config.d_lr, name='d_lr')
+            self.d_lr_update = tf.assign(self.d_lr, tf.maximum(self.d_lr*0.5, config.lr_lower_boundary), name='d_lr_update')
 
         self.model_dir = config.model_dir
         self.load_path = config.load_path
@@ -95,6 +100,16 @@ class Trainer(object):
             self.G_z_vort = denorm_img(self.G_z_vort_)
             self.G_z_div_ = divergence(self.G_z_*self.batch_manager.x_range)
         
+        if self.archi == 'dg':
+            x_r_disc = self.x
+            x_f_disc = self.G_z_
+            if self.use_j:
+                x_r_disc = self.x_jaco
+                x_f_disc = self.G_z_jaco_
+
+            self.D_x, _, self.D_var = DiscriminatorPatch(x_r_disc, self.filters, 'D')
+            self.D_G, _, _ = DiscriminatorPatch(x_f_disc, self.filters, 'D', reuse=True)
+        
         show_all_variables()
 
         if self.optimizer == 'adam':
@@ -103,7 +118,7 @@ class Trainer(object):
             raise Exception("[!] Caution! Paper didn't use {} opimizer other than Adam".format(self.config.optimizer))
 
         g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
-
+        
         # losses
         self.g_loss_l1 = tf.reduce_mean(tf.abs(self.G_ - self.x))
         if self.data_type == 'velocity':
@@ -119,9 +134,20 @@ class Trainer(object):
         else:
             self.g_loss = self.g_loss_l1
 
+        if self.archi == 'dg':
+            d_optimizer = optimizer(self.d_lr, beta1=self.beta1, beta2=self.beta2)
+            self.g_loss_real = tf.reduce_mean(tf.square(self.D_G-1))
+            self.d_loss_fake = tf.reduce_mean(tf.square(self.D_G))
+            self.d_loss_real = tf.reduce_mean(tf.square(self.D_x-1))
+
+            self.g_loss += self.g_loss_real*self.w_adv
+            self.d_loss = self.d_loss_fake + self.d_loss_real
+            self.d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
+
         self.g_optim = g_optimizer.minimize(self.g_loss, global_step=self.step, var_list=self.G_var)
         self.epoch = tf.placeholder(tf.float32)
- 
+
+        # summary
         summary = [
             tf.summary.image("G", self.G),
             tf.summary.image("G_z", self.G_z),
@@ -134,7 +160,17 @@ class Trainer(object):
             tf.summary.scalar('misc/q', self.batch_manager.q.size()),
 
             tf.summary.histogram("y", self.y),
+            tf.summary.histogram("z", self.z),
         ]
+
+        if self.archi == 'dg':
+            summary += [
+                tf.summary.scalar("loss/g_loss_real", self.g_loss_real),
+                tf.summary.scalar("loss/d_loss", self.d_loss),
+                tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
+                tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
+                tf.summary.scalar("misc/d_lr", self.d_lr),
+            ]
 
         if self.data_type == 'velocity':
             summary += [
@@ -202,12 +238,20 @@ class Trainer(object):
         self.summary_writer.add_summary(summary_once, 0)
         self.summary_writer.flush()
         
+        
+        # train
+        optim = [self.g_optim]
+        lr_update = [self.g_lr_update]
+        if self.archi == 'dg':
+            optim.append(self.d_optim)
+            lr_update.append(self.d_lr_update)
+        
         for step in trange(self.start_step, self.max_step):
-            self.sess.run(self.g_optim)
+            self.sess.run(optim)
 
             if step % self.log_step == 0 or step == self.max_step-1:
                 ep = step*self.batch_manager.epochs_per_step
-                loss, summary = self.sess.run([self.g_loss, self.summary_op],
+                loss, summary = self.sess.run([self.g_loss,self.summary_op],
                     feed_dict={self.epoch: ep})
                 assert not np.isnan(loss), 'Model diverged with loss = NaN'
                 print("\n[{}/{}/ep{}] Loss: {:.6f}".format(step, self.max_step, ep, loss))
@@ -219,7 +263,7 @@ class Trainer(object):
                 self.generate(z_samples, self.model_dir, idx=step)
 
             if step % self.lr_update_step == self.lr_update_step - 1:
-                self.sess.run(self.g_lr_update)
+                self.sess.run(lr_update)
 
         # save last checkpoint..
         save_path = os.path.join(self.model_dir, 'model.ckpt')

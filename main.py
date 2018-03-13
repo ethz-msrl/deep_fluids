@@ -1,19 +1,12 @@
 import numpy as np
 import tensorflow as tf
 
+from trainer import Trainer
 from data import BatchManager
 from config import get_config
 from utils import prepare_dirs_and_logger, save_config
 
 def main(config):
-    if config.archi == 'de':
-        from trainer import Trainer
-    elif config.archi == 'dg':
-        from trainer_dg import TrainerDG
-        Trainer = TrainerDG
-    else:
-        raise Exception("[!] You should specify `archi` to load a trainer")
-
     prepare_dirs_and_logger(config)
     tf.set_random_seed(config.random_seed)
 
