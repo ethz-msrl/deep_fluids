@@ -254,7 +254,7 @@ class Trainer(object):
                 loss, summary = self.sess.run([self.g_loss,self.summary_op],
                     feed_dict={self.epoch: ep})
                 assert not np.isnan(loss), 'Model diverged with loss = NaN'
-                print("\n[{}/{}/ep{}] Loss: {:.6f}".format(step, self.max_step, ep, loss))
+                print("\n[{}/{}/ep{:.2f}] Loss: {:.6f}".format(step, self.max_step, ep, loss))
 
                 self.summary_writer.add_summary(summary, global_step=step)
                 self.summary_writer.flush()
