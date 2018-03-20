@@ -4,7 +4,7 @@ REM python main.py --archi=dg --tag=11_0.001 --w1=1 --w2=1 --w_adv=0.001 --data_
 REM cnn
 
 REM learning rate test
-python main.py --archi=de --tag=lr_1e-4_200k --data_type=velocity --g_lr=0.00010 --lr_update_step=80000 --max_step=200000 --dataset=smoke_pos10_f100 --height=128 --width=96
+python main.py --archi=de --tag=lr_1e-4_200k --data_type=velocity --g_lr=0.00010 --lr_update_step=80000 --max_step=200000 --dataset=smoke_pos10_f100 --height=128 --width=96 --load_path=log/de/velocity/smoke_pos10_f100_0314_082913_lr_1e-4_200k --start_step=50227
 
 REM python main.py --archi=de --tag=lr_1e-3 --data_type=velocity --g_lr=0.00100 --lr_update_step=120000 --dataset=smoke_pos10_f100 --height=128 --width=96
 REM -> Nan, failed!

@@ -12,25 +12,25 @@ import gc
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--log_dir", type=str, default='../data/smoke_pos10_f100_test')
+parser.add_argument("--log_dir", type=str, default='../data/smoke_pos21_size5_f200')
 
-parser.add_argument("--num_param", type=int, default=2)
-parser.add_argument("--path_format", type=str, default='%d_%d.npz')
+parser.add_argument("--num_param", type=int, default=3)
+parser.add_argument("--path_format", type=str, default='%d_%d_%d.npz')
 parser.add_argument("--p0", type=str, default='src_x_pos')
-parser.add_argument("--p1", type=str, default='frames')
+parser.add_argument("--p1", type=str, default='src_radius')
+parser.add_argument("--p2", type=str, default='frames')
 
-num_p = 10
-num_f = 100
-num_sim = num_p*num_f
-parser.add_argument("--num_src_x_pos", type=int, default=num_p)
+parser.add_argument("--num_src_x_pos", type=int, default=21)
 parser.add_argument("--min_src_x_pos", type=float, default=0.2)
 parser.add_argument("--max_src_x_pos", type=float, default=0.8)
 parser.add_argument("--src_y_pos", type=float, default=0.1)
-parser.add_argument("--src_radius", type=float, default=0.08)
-parser.add_argument("--num_frames", type=int, default=num_f)
+parser.add_argument("--num_src_radius", type=int, default=5)
+parser.add_argument("--min_src_radius", type=float, default=0.04)
+parser.add_argument("--max_src_radius", type=float, default=0.08)
+parser.add_argument("--num_frames", type=int, default=200)
 parser.add_argument("--min_frames", type=int, default=0)
-parser.add_argument("--max_frames", type=int, default=num_f-1)
-parser.add_argument("--num_simulations", type=int, default=num_sim)
+parser.add_argument("--max_frames", type=int, default=199)
+parser.add_argument("--num_simulations", type=int, default=21000)
 
 parser.add_argument("--resolution_x", type=int, default=96)
 parser.add_argument("--resolution_y", type=int, default=128)
@@ -39,7 +39,6 @@ parser.add_argument("--bWidth", type=int, default=1)
 parser.add_argument("--open_bound", type=bool, default=False)
 parser.add_argument("--time_step", type=float, default=0.5)
 parser.add_argument("--clamp_mode", type=int, default=2)
-parser.add_argument("--strength", type=float, default=0.1)
 
 args = parser.parse_args()
 
@@ -61,10 +60,16 @@ def main():
 			print('  %s: %s' % (k, v))
 			f.write('%s: %s\n' % (k, v))
 
-	p_list = np.linspace(args.min_src_x_pos, 
+	p1_space = np.linspace(args.min_src_x_pos, 
 						   args.max_src_x_pos,
 						   args.num_src_x_pos)
-	pi_list = range(args.num_src_x_pos)
+	p2_space = np.linspace(args.min_src_radius,
+						   args.max_src_radius,
+						   args.num_src_radius)
+	p_list = np.array(np.meshgrid(p1_space, p2_space)).T.reshape(-1, 2)
+	pi1_space = range(args.num_src_x_pos)
+	pi2_space = range(args.num_src_radius)
+	pi_list = np.array(np.meshgrid(pi1_space, pi2_space)).T.reshape(-1, 2)
 
 	# solver params
 	res_x = args.resolution_x
@@ -112,8 +117,8 @@ def main():
 		pressure.clear()
 		stream.clear()
 		
-		radius = gs.x*args.src_radius
-		source = solver.create(Sphere, center=gs*vec3(p,args.src_y_pos,0.5), radius=radius)
+		radius = gs.x*p[1]
+		source = solver.create(Sphere, center=gs*vec3(p[0],args.src_y_pos,0.5), radius=radius)
 		
 		for t in range(args.num_frames):
 			print('%s: simulating %d of %d (%d/%d)' % (datetime.now(), sim_id, num_total_sim, i+1, num_total_p))
@@ -124,10 +129,6 @@ def main():
 							   openBounds=args.open_bound, boundaryWidth=args.bWidth, clampMode=args.clamp_mode)
 			advectSemiLagrange(flags=flags, vel=vel, grid=vel,     order=2,
 							   openBounds=args.open_bound, boundaryWidth=args.bWidth, clampMode=args.clamp_mode)
-
-			if args.strength > 0:
-				vorticityConfinement(vel=vel, flags=flags, strength=args.strength)
-
 			setWallBcs(flags=flags, vel=vel)
 			addBuoyancy(density=density, vel=vel, gravity=buoyancy, flags=flags)
 			solvePressure(flags=flags, vel=vel, pressure=pressure, cgMaxIterFac=10.0, cgAccuracy=0.0001)
@@ -139,7 +140,7 @@ def main():
 			copyGridToArrayReal(target=s_, source=stream)
 			copyGridToArrayMAC(target=v_, _Source=vel)
 			
-			param_ = [p, t]
+			param_ = [p[0], p[1], t]
 
 			d_range = [np.minimum(d_range[0], d_.min()),
 					   np.maximum(d_range[1], d_.max())]
@@ -150,23 +151,15 @@ def main():
 			s_range = [np.minimum(s_range[0], s_.min()),
 					   np.maximum(s_range[1], s_.max())]
 
-			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (pi, t))
+			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (pi[0], pi[1], t))
 			np.savez_compressed(v_file_path, 
 								x=v_[:,:,:2],
 								y=param_)
 
-			s_file_path = os.path.join(args.log_dir, 's', args.path_format % (pi, t))
+			s_file_path = os.path.join(args.log_dir, 's', args.path_format % (pi[0], pi[1], t))
 			np.savez_compressed(s_file_path, 
 								x=np.expand_dims(s_, axis=-1),
 								y=param_)
-
-			# sim_file_path = os.path.join(args.log_dir, args.path_format % (pi, t))
-			# np.savez_compressed(sim_file_path, 
-			# 					d=np.expand_dims(d_, axis=-1),
-			# 					p=np.expand_dims(p_, axis=-1),
-			# 					s=np.expand_dims(s_, axis=-1),
-			# 					v=v_[:,:,:2],
-			# 					param=param_)
 
 			solver.step()
 			sim_id += 1
