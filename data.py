@@ -475,9 +475,12 @@ if __name__ == "__main__":
     # test: 2d
     config, unparsed = get_config()
     setattr(config, 'is_3d', False)
-    setattr(config, 'dataset', 'smoke_pos21_size5_f200')
-    setattr(config, 'res_x', 96)
-    setattr(config, 'res_y', 128)
+    # setattr(config, 'dataset', 'smoke_pos21_size5_f200')
+    # setattr(config, 'res_x', 96)
+    # setattr(config, 'res_y', 128)
+    setattr(config, 'dataset', 'liquid_pos10_size4_f200')
+    setattr(config, 'res_x', 128)
+    setattr(config, 'res_y', 64)
     data_types = ['velocity']
 
     for data_type in data_types:

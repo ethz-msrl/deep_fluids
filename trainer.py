@@ -273,15 +273,8 @@ class Trainer(object):
     def build_test_model(self, b_num):
         self.b_num = b_num
         self.z = tf.placeholder(dtype=tf.float32, shape=[self.b_num, self.c_num])
-        self.G_, _ = GeneratorBE(
-                self.z, self.conv_hidden_num, self.output_shape,
-                num_conv=self.num_conv, conv_k=self.conv_k, act=self.act, reuse=True)
+        self.G_, _ = GeneratorBE(self.z, self.filters, self.output_shape, reuse=True)
         self.G = denorm_img(self.G_) # for debug
-
-        # for streamfunction
-        if self.data_type == 'stream':
-            self.G_curl_ = self.to_vel(curl(self.G_))
-            self.G_curl = denorm_img(self.G_curl_)
 
     def test(self):
         # dirty way to bypass graph finilization error
@@ -291,18 +284,12 @@ class Trainer(object):
         self.build_test_model(self.test_batch_size)
 
         intv = self.test_intv
-        # extrapolation test
-        # z_range1 = [-2, -1]
-        # z_range2 = [1, 2]
-        # z_varying1 = np.linspace(z_range1[0], z_range1[1], num=intv/2)
-        # z_varying2 = np.linspace(z_range2[0], z_range2[1], num=intv/2)
-        # z_varying = np.concatenate((z_varying1,z_varying2), axis=0)
-        z_range = [0, 2]
+        z_range = [-1, 1]
         z_varying = np.linspace(z_range[0], z_range[1], num=intv)
         z_shape = (intv, self.c_num)
 
         from itertools import product
-        for p in range(self.c_num-1,self.c_num):
+        for p in range(self.c_num):
             out_dir = os.path.join(self.model_dir, 'p%d_n%d' % (p, intv))
 
             c_list = []
@@ -310,23 +297,10 @@ class Trainer(object):
             for i in range(self.c_num):
                 if i != p:
                     y_num = int(self.batch_manager.y_num[i])
-                    if i == self.c_num-1:
-                        p_ = [161]
-                    elif i == 0:
-                        p_ = [9,10]
+                    if y_num < 5:
+                        p_ = range(y_num)
                     else:
-                        p_ = [1]
-                    #     p_ = [0] #range(y_num)
-                    # if i == 0:
-                    #     p_ = [5]
-                    # elif i == 1:
-                    #     p_ = [2]
-                    # if i == self.c_num-1:
-                    #     p_ = [0, 100]
-                    # if y_num < 5:
-                    #     p_ = range(y_num)
-                    # else:
-                    #     p_ = [0, 1, int(y_num/2)-1, int(y_num/2), y_num-2, y_num-1]
+                        p_ = [0, 1, int(y_num/2)-1, int(y_num/2), y_num-2, y_num-1]
 
                     p_list.append(p_)
                     c_list.append([y/float(y_num-1)*2-1 for y in p_])
@@ -361,59 +335,6 @@ class Trainer(object):
                 title = str(p1) + '_' + str(p2)
                 self.generate_video(title, out_dir, z_c, dump=True)
                 
-                # y1 = self.batch_manager.y_num[0]                
-                # for p1 in range(y1-1):
-                #     p1 += 0.5
-                #     c1 = p1/float(y1-1)*2-1
-                #     z_c = np.zeros(shape=z_shape)
-                #     z_c[:,0] = c1
-                #     z_c[:,-1] = z_varying
-                #     title = str(p1)
-                #     self.generate_video(title, out_dir, z_c, dump=True)
-
-            #     for i in range(self.c_num-1):
-            #         y_num = int(self.batch_manager.y_num[i])
-            #         if y_num < 5:
-            #             p_list = range(y_num-2)
-            #         else:
-            #             p_list = range(y_num-2)
-
-            #         for test_p in p_list:
-            #             title = 'intp_%d_%d_%d' % (i, test_p, test_p+1)
-            #             test_p = (test_p + test_p+1) * 0.5
-            #             test_c = test_p/float(y_num-1)*2-1
-                        
-            #             z_c = np.ones(shape=z_shape)*-1
-            #             z_c[:,i] = test_c
-            #             z_c[:,-1] = z_varying
-
-            #             self.generate_video(title, out_dir, z_c, dump=True)
-
-                # # oscilation
-                # num_rot = 10
-                # start_to_move = 0
-                # rest_frames = intv - start_to_move
-                # omega = 2*np.pi*num_rot / float(rest_frames)
-                # amp_p1 = 0.1
-                # amp_p2 = 1
-                # title = 'osc_rot%d_amp1_%3f' % (num_rot, amp_p1)
-                # t = np.array(range(rest_frames))
-                
-                # z_c = np.zeros(shape=z_shape)
-                # z_c[:,0] = amp_p1*np.cos(omega*t)
-                # z_c[:,1] = -amp_p2*np.sin(omega*t)
-                # z_c[:,-1] = z_varying
-
-                # self.generate_video(title, out_dir, z_c, dump=True)
-
-                # # time+pi
-                # for i in range(self.c_num-1):
-                #     title = 'p%d+time' % i
-                #     z_c = np.ones(shape=z_shape) # 1 for others
-                #     z_c[:,i] = z_varying
-                #     z_c[:,-1] = z_varying
-                #     self.generate_video(title, out_dir, z_c, dump=True)
-
     def generate_video(self, title, out_dir, z_c, dump=False):
         img_dir = os.path.join(out_dir, title)
         print(img_dir)

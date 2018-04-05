@@ -12,7 +12,7 @@ import gc
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--log_dir", type=str, default='D:/Polybox/dev/deep-fluids/data/smoke3_xpos10_f100_test')
+parser.add_argument("--log_dir", type=str, default='data/smoke3_xpos10_f100_test')
 
 parser.add_argument("--num_param", type=int, default=2)
 parser.add_argument("--path_format", type=str, default='%d_%d.npz')

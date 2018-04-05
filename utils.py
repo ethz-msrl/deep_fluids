@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 def prepare_dirs_and_logger(config):
     # print(__file__)
-    os.chdir(os.path.dirname(__file__))    
+    os.chdir(os.path.dirname(__file__))
 
     formatter = logging.Formatter("%(asctime)s:%(levelname)s::%(message)s")
     logger = logging.getLogger()

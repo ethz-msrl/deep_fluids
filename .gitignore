@@ -7,8 +7,12 @@ data
 # Log
 log
 
+# Bin file
+*.bin
+
 # ETC
 .DS_Store
+video
 
 # Created by https://www.gitignore.io/api/python,vim
 

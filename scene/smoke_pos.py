@@ -7,12 +7,15 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from manta import *
 import gc
+try:
+	from manta import *
+except ImportError:
+	pass
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--log_dir", type=str, default='../data/smoke_pos10_f100_test')
+parser.add_argument("--log_dir", type=str, default='data/smoke_pos10_f100_test')
 
 parser.add_argument("--num_param", type=int, default=2)
 parser.add_argument("--path_format", type=str, default='%d_%d.npz')
