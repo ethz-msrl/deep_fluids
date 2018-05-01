@@ -177,7 +177,7 @@ def jacobian(x, data_format='NHCW'):
         w = nhwc_to_nchw(w)
     return j, w
 
-def curl(x, data_format):
+def curl(x, data_format='NHWC'):
     if data_format == 'NCHW':
         x = nchw_to_nhwc(x)
 

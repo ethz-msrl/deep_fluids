@@ -7,7 +7,7 @@ from datetime import datetime
 import time
 
 from models import *
-from utils import save_image, convert_png2mp4, streamplot, vortplot, gradplot, jacoplot
+from utils import save_image, convert_png2mp4, streamplot, vortplot, gradplot, jacoplot, divplot
 
 class Trainer(object):
     def __init__(self, config, batch_manager):
@@ -18,9 +18,7 @@ class Trainer(object):
 
         self.dataset = config.dataset
         self.data_type = config.data_type
-        if self.data_type == 'velocity':
-            self.x_jaco, self.x_vort = jacobian(self.x)
-        self.output_shape = get_conv_shape(self.x)[1:]
+        self.x_jaco, self.x_vort = jacobian(self.x)
 
         self.is_3d = config.is_3d
         self.archi = config.archi
@@ -31,26 +29,48 @@ class Trainer(object):
         self.b_num = config.batch_size
 
         self.filters = config.filters
+        self.num_conv = config.num_conv
         self.w1 = config.w1
         self.w2 = config.w2
-        self.use_j = config.use_jaco
-        self.w_adv = config.w_adv
+        self.use_c = config.use_curl
+        if self.use_c:
+            self.output_shape = get_conv_shape(self.x)[1:3] + [1]
+        else:
+            self.output_shape = get_conv_shape(self.x)[1:]
 
         self.optimizer = config.optimizer
         self.beta1 = config.beta1
         self.beta2 = config.beta2
-        self.g_lr = tf.Variable(config.g_lr, name='g_lr')
-        self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_lower_boundary), name='g_lr_update')        
-        if self.archi == 'dg':
-            self.d_lr = tf.Variable(config.d_lr, name='d_lr')
-            self.d_lr_update = tf.assign(self.d_lr, tf.maximum(self.d_lr*0.5, config.lr_lower_boundary), name='d_lr_update')
-
+                
         self.model_dir = config.model_dir
         self.load_path = config.load_path
 
         self.start_step = config.start_step
         self.step = tf.Variable(self.start_step, name='step', trainable=False)
         self.max_step = config.max_step
+
+        self.lr_update = config.lr_update
+        if self.lr_update == 'decay':
+            self.g_lr = tf.Variable(config.g_lr, name='g_lr')
+            self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_lower_boundary), name='g_lr_update')
+        elif self.lr_update == 'cyclic':
+            lr_min = config.lr_lower_boundary
+            lr_max = config.lr_upper_boundary
+            m = 4.0
+            period = int(self.max_step/m)
+            self.g_lr = tf.Variable(lr_min, name='g_lr')
+            self.g_lr_update = tf.assign(self.g_lr, 
+               lr_min+0.5*(lr_max-lr_min)*(tf.cos(tf.cast(self.step%period, tf.float32)*np.pi/period)+1), name='g_lr_update')
+        elif self.lr_update == 'test':
+            lr_min = config.lr_lower_boundary
+            lr_max = config.lr_upper_boundary
+            self.g_lr = tf.Variable(lr_min, name='g_lr')
+            self.g_lr_update = tf.assign(self.g_lr, 
+               lr_min+(lr_max-lr_min)*tf.cast(self.step/self.max_step, tf.float32), name='g_lr_update')
+        else:
+            raise Exception("[!] Invalid lr update method")
+
+
         self.lr_update_step = config.lr_update_step
         self.log_step = config.log_step
         self.test_step = config.test_step
@@ -82,67 +102,52 @@ class Trainer(object):
             self.batch_manager.start_thread(self.sess)
 
     def build_model(self):
-        self.G_, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape)
+        if self.use_c:
+            self.G_s, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, num_conv=self.num_conv)
+            self.G_ = curl(self.G_s)
+        else:
+            self.G_, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, num_conv=self.num_conv)
         self.G = denorm_img(self.G_) # for debug
 
-        if self.data_type == 'velocity':
-            self.G_jaco_, self.G_vort_ = jacobian(self.G_)
-            self.G_vort = denorm_img(self.G_vort_)
-            self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
-                
+        self.G_jaco_, self.G_vort_ = jacobian(self.G_)
+        self.G_vort = denorm_img(self.G_vort_)
+        self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
+        
         # to test
         self.z = tf.random_uniform(shape=[self.b_num, self.c_num], minval=-1.0, maxval=1.0)
-        self.G_z_, _ = GeneratorBE(self.z, self.filters, self.output_shape, reuse=True)
+        if self.use_c:
+            self.G_z_s, _ = GeneratorBE(self.z, self.filters, self.output_shape, num_conv=self.num_conv, reuse=True)
+            self.G_z_ = curl(self.G_z_s)
+        else:
+            self.G_z_, _ = GeneratorBE(self.z, self.filters, self.output_shape, num_conv=self.num_conv, reuse=True)
         self.G_z = denorm_img(self.G_z_) # for debug
 
-        if self.data_type == 'velocity':
-            self.G_z_jaco_, self.G_z_vort_ = jacobian(self.G_z_)
-            self.G_z_vort = denorm_img(self.G_z_vort_)
-            self.G_z_div_ = divergence(self.G_z_*self.batch_manager.x_range)
-        
-        if self.archi == 'dg':
-            x_r_disc = self.x
-            x_f_disc = self.G_z_
-            if self.use_j:
-                x_r_disc = self.x_jaco
-                x_f_disc = self.G_z_jaco_
-
-            self.D_x, _, self.D_var = DiscriminatorPatch(x_r_disc, self.filters, 'D')
-            self.D_G, _, _ = DiscriminatorPatch(x_f_disc, self.filters, 'D', reuse=True)
+        self.G_z_jaco_, self.G_z_vort_ = jacobian(self.G_z_)
+        self.G_z_vort = denorm_img(self.G_z_vort_)
+        self.G_z_div_ = divergence(self.G_z_*self.batch_manager.x_range)
         
         show_all_variables()
 
         if self.optimizer == 'adam':
             optimizer = tf.train.AdamOptimizer
+            g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
+        elif self.optimizer == 'gd':
+            optimizer = tf.train.GradientDescentOptimizer
+            g_optimizer = optimizer(self.g_lr)
         else:
-            raise Exception("[!] Caution! Paper didn't use {} opimizer other than Adam".format(self.config.optimizer))
+            raise Exception("[!] Invalid opimizer")
 
-        g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
-        
         # losses
         self.g_loss_l1 = tf.reduce_mean(tf.abs(self.G_ - self.x))
-        if self.data_type == 'velocity':
-            self.g_loss_j_l1 = tf.reduce_mean(tf.abs(self.G_jaco_ - self.x_jaco))
-            
-            self.g_loss_ke = tf.abs(tf.reduce_mean(tf.square(self.G_)) - tf.reduce_mean(tf.square(self.x)))
-            self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
-            self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
-            self.g_loss_z_div = tf.reduce_mean(tf.abs(self.G_z_div_))
-            self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
+        self.g_loss_j_l1 = tf.reduce_mean(tf.abs(self.G_jaco_ - self.x_jaco))
+        
+        self.g_loss_ke = tf.abs(tf.reduce_mean(tf.square(self.G_)) - tf.reduce_mean(tf.square(self.x)))
+        self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
+        self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
+        self.g_loss_z_div = tf.reduce_mean(tf.abs(self.G_z_div_))
+        self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
 
-            self.g_loss = self.g_loss_l1*self.w1 + self.g_loss_j_l1*self.w2
-        else:
-            self.g_loss = self.g_loss_l1
-
-        if self.archi == 'dg':
-            d_optimizer = optimizer(self.d_lr, beta1=self.beta1, beta2=self.beta2)
-            self.g_loss_real = tf.reduce_mean(tf.square(self.D_G-1))
-            self.d_loss_fake = tf.reduce_mean(tf.square(self.D_G))
-            self.d_loss_real = tf.reduce_mean(tf.square(self.D_x-1))
-
-            self.g_loss += self.g_loss_real*self.w_adv
-            self.d_loss = self.d_loss_fake + self.d_loss_real
-            self.d_optim = d_optimizer.minimize(self.d_loss, var_list=self.D_var)
+        self.g_loss = self.g_loss_l1*self.w1 + self.g_loss_j_l1*self.w2
 
         self.g_optim = g_optimizer.minimize(self.g_loss, global_step=self.step, var_list=self.G_var)
         self.epoch = tf.placeholder(tf.float32)
@@ -161,43 +166,32 @@ class Trainer(object):
 
             tf.summary.histogram("y", self.y),
             tf.summary.histogram("z", self.z),
+
+            tf.summary.image("G_vort", self.G_vort),
+            tf.summary.image("G_div", self.G_div_),
+            tf.summary.image("G_z_div", self.G_z_div_),
+
+            tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),
+            tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
+            
+            tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
+            tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
+            tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
+            tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
         ]
 
-        if self.archi == 'dg':
+        if self.use_c:
             summary += [
-                tf.summary.scalar("loss/g_loss_real", self.g_loss_real),
-                tf.summary.scalar("loss/d_loss", self.d_loss),
-                tf.summary.scalar("loss/d_loss_real", self.d_loss_real),
-                tf.summary.scalar("loss/d_loss_fake", self.d_loss_fake),
-                tf.summary.scalar("misc/d_lr", self.d_lr),
-            ]
-
-        if self.data_type == 'velocity':
-            summary += [
-                tf.summary.image("G_vort", self.G_vort),
-                tf.summary.image("G_div", self.G_div_),
-                tf.summary.image("G_z_div", self.G_z_div_),
-
-                tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),
-                tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
-                
-                tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
-                tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
-                tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
-                tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
+                tf.summary.image("G_s", self.G_s),
             ]
 
         self.summary_op = tf.summary.merge(summary)
 
         summary = [
             tf.summary.image("x", denorm_img(self.x)),
+            tf.summary.image("x_vort", denorm_img(self.x_vort)),
+            tf.summary.image('x_div', divergence(self.x*self.batch_manager.x_range)),
         ]
-
-        if self.data_type == 'velocity':
-            summary += [
-                tf.summary.image("x_vort", denorm_img(self.x_vort)),
-                tf.summary.image('x_div', divergence(self.x*self.batch_manager.x_range)),
-            ]
         self.summary_once = tf.summary.merge(summary) # call just once
 
     def train(self):
@@ -218,10 +212,9 @@ class Trainer(object):
 
         # test2: compare to gt
         x, pi, zi_ = self.batch_manager.random_list(self.b_num)
-        if self.data_type == 'velocity':
-            x_w = self.get_vort_image(x/127.5-1, is_vel=True)
-            x_w = np.concatenate((x_w,x_w,x_w), axis=3)
-            x = np.concatenate((x,x_w), axis=0)
+        x_w = self.get_vort_image(x/127.5-1, is_vel=True)
+        x_w = np.concatenate((x_w,x_w,x_w), axis=3)
+        x = np.concatenate((x,x_w), axis=0)
         save_image(x, '{}/x_fixed_gt.png'.format(self.model_dir))
 
         with open('{}/x_fixed_gt.txt'.format(self.model_dir), 'w') as f:
@@ -238,21 +231,14 @@ class Trainer(object):
         self.summary_writer.add_summary(summary_once, 0)
         self.summary_writer.flush()
         
-        
         # train
-        optim = [self.g_optim]
-        lr_update = [self.g_lr_update]
-        if self.archi == 'dg':
-            optim.append(self.d_optim)
-            lr_update.append(self.d_lr_update)
-        
         for step in trange(self.start_step, self.max_step):
-            self.sess.run(optim)
+            self.sess.run(self.g_optim)
 
             if step % self.log_step == 0 or step == self.max_step-1:
                 ep = step*self.batch_manager.epochs_per_step
                 loss, summary = self.sess.run([self.g_loss,self.summary_op],
-                    feed_dict={self.epoch: ep})
+                                              feed_dict={self.epoch: ep})
                 assert not np.isnan(loss), 'Model diverged with loss = NaN'
                 print("\n[{}/{}/ep{:.2f}] Loss: {:.6f}".format(step, self.max_step, ep, loss))
 
@@ -262,8 +248,10 @@ class Trainer(object):
             if step % self.test_step == 0 or step == self.max_step-1:
                 self.generate(z_samples, self.model_dir, idx=step)
 
-            if step % self.lr_update_step == self.lr_update_step - 1:
-                self.sess.run(lr_update)
+            if self.lr_update == 'cyclic' or self.lr_update == 'test':
+                g_lr = self.sess.run(self.g_lr_update)
+            elif step % self.lr_update_step == self.lr_update_step - 1:
+                self.sess.run(self.g_lr_update)
 
         # save last checkpoint..
         save_path = os.path.join(self.model_dir, 'model.ckpt')
@@ -275,6 +263,7 @@ class Trainer(object):
         self.z = tf.placeholder(dtype=tf.float32, shape=[self.b_num, self.c_num])
         self.G_, _ = GeneratorBE(self.z, self.filters, self.output_shape, reuse=True)
         self.G = denorm_img(self.G_) # for debug
+        self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
 
     def test(self):
         # dirty way to bypass graph finilization error
@@ -289,39 +278,39 @@ class Trainer(object):
         z_shape = (intv, self.c_num)
 
         from itertools import product
-        for p in range(self.c_num):
+        for p in range(self.c_num-1,self.c_num):
             out_dir = os.path.join(self.model_dir, 'p%d_n%d' % (p, intv))
 
-            c_list = []
-            p_list = []
-            for i in range(self.c_num):
-                if i != p:
-                    y_num = int(self.batch_manager.y_num[i])
-                    if y_num < 5:
-                        p_ = range(y_num)
-                    else:
-                        p_ = [0, 1, int(y_num/2)-1, int(y_num/2), y_num-2, y_num-1]
+            # c_list = []
+            # p_list = []
+            # for i in range(self.c_num):
+            #     if i != p:
+            #         y_num = int(self.batch_manager.y_num[i])
+            #         if y_num < 5:
+            #             p_ = range(y_num)
+            #         else:
+            #             p_ = [0, 1, int(y_num/2)-1, int(y_num/2), y_num-2, y_num-1]
 
-                    p_list.append(p_)
-                    c_list.append([y/float(y_num-1)*2-1 for y in p_])
+            #         p_list.append(p_)
+            #         c_list.append([y/float(y_num-1)*2-1 for y in p_])
 
-            dump = (p == self.c_num-1)
-            for c, ps in zip(product(*c_list), product(*p_list)):
-                title = ('%d_'*len(ps) % ps)[:-1]
-                c = list(c)
-                c.insert(p, z_varying)
+            # dump = (p == self.c_num-1)
+            # for c, ps in zip(product(*c_list), product(*p_list)):
+            #     title = ('%d_'*len(ps) % ps)[:-1]
+            #     c = list(c)
+            #     c.insert(p, z_varying)
 
-                z_c = np.zeros(shape=z_shape)
-                for i in range(self.c_num):
-                    z_c[:,i] = c[i]
+            #     z_c = np.zeros(shape=z_shape)
+            #     for i in range(self.c_num):
+            #         z_c[:,i] = c[i]
                 
-                self.generate_video(title, out_dir, z_c, dump=dump)
+            #     self.generate_video(title, out_dir, z_c, dump=dump)
 
             if p == self.c_num-1:
                 # interpolation test
                 # p_list = []
                 p1 = 9.5
-                p2 = 1
+                p2 = 1.5
                 y1 = int(self.batch_manager.y_num[0])
                 y2 = int(self.batch_manager.y_num[1])
 
@@ -415,6 +404,7 @@ class Trainer(object):
         
         G = None
         G_curl = None
+        G_div = None
         for b in range(niter):            
             G_ = self.sess.run(self.G_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
             G_, _ = self.batch_manager.denorm(x=to_nhwc_numpy(G_))
@@ -423,7 +413,15 @@ class Trainer(object):
                 G = G_
             else:
                 G = np.concatenate((G, G_), axis=0)
-            
+
+            if self.data_type == 'velocity':
+                G_div_ = self.sess.run(self.G_div_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
+
+                if G_div is None:
+                    G_div = G_div_
+                else:
+                    G_div = np.concatenate((G_div, G_div_), axis=0)
+
             if self.data_type == 'stream':
                 G_curl_ = self.sess.run(self.G_curl_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
                 G_curl_ = self.batch_manager.denorm_vel(x=to_nhwc_numpy(G_curl_))
@@ -432,6 +430,12 @@ class Trainer(object):
                     G_curl = G_curl_
                 else:
                     G_curl = np.concatenate((G_curl, G_curl_), axis=0)
+
+        print(G_div.shape)
+        vmax = max(np.abs(G_div.min()), G_div.max())
+        print(np.abs(G_div.min()), G_div.max(), vmax)
+        # vmax = 0.29133207 # 10: 10_2
+        vmax = 0.20951328 # 10: 9.5_1.5
 
         for i in range(intv):
             x = G[i]
@@ -443,6 +447,10 @@ class Trainer(object):
                 xv = vortplot(x, img_path)
                 # img_path = os.path.join(img_dir, 'j%04d.png' % i)
                 # jacoplot(x, img_path)
+
+                img_path = os.path.join(img_dir, 'd%04d.png' % i)
+                divplot(G_div[i,:,:,0], img_path, vmax=vmax)
+
             elif self.data_type == 'pressure' or\
                  self.data_type == 'stream':                
                 img_path = os.path.join(img_dir, 'g%04d.png' % i)

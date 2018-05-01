@@ -135,6 +135,14 @@ def streamplot(x, filename, density=2.0, scale=5.0):
 
     return data
 
+def divplot(x, filename, vmax):        
+    x /= vmax
+    x = (x+1)*0.5 # [0,1]
+    x = np.uint8(plt.cm.RdBu(x)*255)
+    im = Image.fromarray(x)
+    im.save(filename)
+    return x
+
 def vortplot(x, filename):
     dudx = x[1:,1:,0] - x[1:,:-1,0]
     dvdx = x[1:,1:,1] - x[1:,:-1,1]
