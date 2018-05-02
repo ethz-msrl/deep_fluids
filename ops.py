@@ -182,8 +182,8 @@ def curl(x, data_format='NHWC'):
         x = nchw_to_nhwc(x)
 
     u = x[:,:-1,:,0] - x[:,1:,:,0] # ds/dy, horizontally flipped
-    u = tf.concat([u,tf.expand_dims(u[:,-1,:], axis=1)], axis=1)
     v = x[:,:,:-1,0] - x[:,:,1:,0] # -ds/dx,
+    u = tf.concat([tf.expand_dims(u[:,0,:], axis=1), u], axis=1)
     v = tf.concat([v,tf.expand_dims(v[:,:,-1], axis=2)], axis=2)
     c = tf.stack([u,v], axis=-1)
 

@@ -148,12 +148,12 @@ class Trainer(object):
         # losses
         self.g_loss_l1 = tf.reduce_mean(tf.abs(self.G_ - self.x))
         self.g_loss_j_l1 = tf.reduce_mean(tf.abs(self.G_jaco_ - self.x_jaco))
+
         self.g_loss_ke = tf.abs(tf.reduce_mean(tf.square(self.G_)) - tf.reduce_mean(tf.square(self.x)))
-        if not self.use_c:
-            self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
-            self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
-            self.g_loss_z_div = tf.reduce_mean(tf.abs(self.G_z_div_))
-            self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
+        self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
+        self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
+        self.g_loss_z_div = tf.reduce_mean(tf.abs(self.G_z_div_))
+        self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
 
         self.g_loss = self.g_loss_l1*self.w1 + self.g_loss_j_l1*self.w2
 
@@ -165,12 +165,20 @@ class Trainer(object):
             tf.summary.image("G", self.G),
             tf.summary.image("G_z", self.G_z),
             tf.summary.image("G_vort", self.G_vort),
+            
+            tf.summary.image("G_div", self.G_div_),
+            tf.summary.image("G_z_div", self.G_z_div_),
 
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/g_loss_l1", self.g_loss_l1),
             tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
-            tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),
-           
+
+            tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),           
+            tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
+            tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
+            tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
+            tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
+
             tf.summary.scalar("misc/g_lr", self.g_lr),
             tf.summary.scalar("misc/epoch", self.epoch),
             tf.summary.scalar('misc/q', self.batch_manager.q.size()),
@@ -182,16 +190,6 @@ class Trainer(object):
         if self.use_c:
             summary += [
                 tf.summary.image("G_s", self.G_s),
-            ]
-        else:
-            summary += [
-                tf.summary.image("G_div", self.G_div_),
-                tf.summary.image("G_z_div", self.G_z_div_),
-
-                tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
-                tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
-                tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
-                tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
             ]
 
         self.summary_op = tf.summary.merge(summary)
