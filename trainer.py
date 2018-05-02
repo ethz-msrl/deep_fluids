@@ -57,7 +57,7 @@ class Trainer(object):
         elif self.lr_update == 'cyclic':
             lr_min = config.lr_min
             lr_max = config.lr_max
-            m = 4.0
+            m = config.num_cycle
             period = int(self.max_step/m)
             self.g_lr = tf.Variable(lr_min, name='g_lr')
             self.g_lr_update = tf.assign(self.g_lr, 

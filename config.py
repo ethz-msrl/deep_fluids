@@ -21,7 +21,7 @@ net_arg.add_argument('--res_z', type=int, default=96)
 net_arg.add_argument('--filters', type=int, default=128,
                      choices=[64, 128], help='n in the paper')
 net_arg.add_argument('--num_conv', type=int, default=5)
-net_arg.add_argument('--last_k', type=int, default=5)
+net_arg.add_argument('--last_k', type=int, default=3)
 net_arg.add_argument('--use_curl', type=str2bool, default=True)
 net_arg.add_argument('--w1', type=float, default=1.0)
 net_arg.add_argument('--w2', type=float, default=0.0)
@@ -42,14 +42,15 @@ train_arg.add_argument('--start_step', type=int, default=0)
 train_arg.add_argument('--max_step', type=int, default=300000)
 train_arg.add_argument('--lr_update_step', type=int, default=120000)
 train_arg.add_argument('--g_lr', type=float, default=0.0001)
-train_arg.add_argument('--lr_max', type=float, default=0.01)
-train_arg.add_argument('--lr_min', type=float, default=0.00001)
+train_arg.add_argument('--lr_max', type=float, default=0.0001)
+train_arg.add_argument('--lr_min', type=float, default=0.0000025)
 train_arg.add_argument('--optimizer', type=str, default='adam',
                        choices=['adam', 'gd'])
 train_arg.add_argument('--beta1', type=float, default=0.5)
 train_arg.add_argument('--beta2', type=float, default=0.999)
 train_arg.add_argument('--lr_update', type=str, default='decay',
                        choices=['decay', 'cyclic', 'test'])
+train_arg.add_argument('--num_cycle', type=float, default=5)
 
 # Misc
 misc_arg = add_argument_group('Misc')
