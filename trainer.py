@@ -30,6 +30,7 @@ class Trainer(object):
 
         self.filters = config.filters
         self.num_conv = config.num_conv
+        self.last_k = config.last_k
         self.w1 = config.w1
         self.w2 = config.w2
         self.use_c = config.use_curl
@@ -52,21 +53,24 @@ class Trainer(object):
         self.lr_update = config.lr_update
         if self.lr_update == 'decay':
             self.g_lr = tf.Variable(config.g_lr, name='g_lr')
-            self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_lower_boundary), name='g_lr_update')
+            self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_min), name='g_lr_update')
         elif self.lr_update == 'cyclic':
-            lr_min = config.lr_lower_boundary
-            lr_max = config.lr_upper_boundary
+            lr_min = config.lr_min
+            lr_max = config.lr_max
             m = 4.0
             period = int(self.max_step/m)
             self.g_lr = tf.Variable(lr_min, name='g_lr')
             self.g_lr_update = tf.assign(self.g_lr, 
                lr_min+0.5*(lr_max-lr_min)*(tf.cos(tf.cast(self.step%period, tf.float32)*np.pi/period)+1), name='g_lr_update')
         elif self.lr_update == 'test':
-            lr_min = config.lr_lower_boundary
-            lr_max = config.lr_upper_boundary
+            lr_min = config.lr_min
+            lr_max = config.lr_max
             self.g_lr = tf.Variable(lr_min, name='g_lr')
+            lr_min_l = np.log10(lr_min)
+            lr_max_l = np.log10(lr_max)
+            # print(lr_min_l, lr_max_l)
             self.g_lr_update = tf.assign(self.g_lr, 
-               lr_min+(lr_max-lr_min)*tf.cast(self.step/self.max_step, tf.float32), name='g_lr_update')
+               10**(lr_min_l + (lr_max_l-lr_min_l)*tf.cast(self.step/self.max_step, tf.float32)), name='g_lr_update')
         else:
             raise Exception("[!] Invalid lr update method")
 
@@ -103,10 +107,12 @@ class Trainer(object):
 
     def build_model(self):
         if self.use_c:
-            self.G_s, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, num_conv=self.num_conv)
+            self.G_s, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, 
+                                               num_conv=self.num_conv, last_k=self.last_k)
             self.G_ = curl(self.G_s)
         else:
-            self.G_, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, num_conv=self.num_conv)
+            self.G_, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape,
+                                              num_conv=self.num_conv, last_k=self.last_k)
         self.G = denorm_img(self.G_) # for debug
 
         self.G_jaco_, self.G_vort_ = jacobian(self.G_)
@@ -116,10 +122,12 @@ class Trainer(object):
         # to test
         self.z = tf.random_uniform(shape=[self.b_num, self.c_num], minval=-1.0, maxval=1.0)
         if self.use_c:
-            self.G_z_s, _ = GeneratorBE(self.z, self.filters, self.output_shape, num_conv=self.num_conv, reuse=True)
+            self.G_z_s, _ = GeneratorBE(self.z, self.filters, self.output_shape,
+                                        num_conv=self.num_conv, last_k=self.last_k, reuse=True)
             self.G_z_ = curl(self.G_z_s)
         else:
-            self.G_z_, _ = GeneratorBE(self.z, self.filters, self.output_shape, num_conv=self.num_conv, reuse=True)
+            self.G_z_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
+                                       num_conv=self.num_conv, last_k=self.last_k, reuse=True)
         self.G_z = denorm_img(self.G_z_) # for debug
 
         self.G_z_jaco_, self.G_z_vort_ = jacobian(self.G_z_)
@@ -140,12 +148,12 @@ class Trainer(object):
         # losses
         self.g_loss_l1 = tf.reduce_mean(tf.abs(self.G_ - self.x))
         self.g_loss_j_l1 = tf.reduce_mean(tf.abs(self.G_jaco_ - self.x_jaco))
-        
         self.g_loss_ke = tf.abs(tf.reduce_mean(tf.square(self.G_)) - tf.reduce_mean(tf.square(self.x)))
-        self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
-        self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
-        self.g_loss_z_div = tf.reduce_mean(tf.abs(self.G_z_div_))
-        self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
+        if not self.use_c:
+            self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
+            self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
+            self.g_loss_z_div = tf.reduce_mean(tf.abs(self.G_z_div_))
+            self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
 
         self.g_loss = self.g_loss_l1*self.w1 + self.g_loss_j_l1*self.w2
 
@@ -156,9 +164,12 @@ class Trainer(object):
         summary = [
             tf.summary.image("G", self.G),
             tf.summary.image("G_z", self.G_z),
+            tf.summary.image("G_vort", self.G_vort),
 
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/g_loss_l1", self.g_loss_l1),
+            tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
+            tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),
            
             tf.summary.scalar("misc/g_lr", self.g_lr),
             tf.summary.scalar("misc/epoch", self.epoch),
@@ -166,23 +177,21 @@ class Trainer(object):
 
             tf.summary.histogram("y", self.y),
             tf.summary.histogram("z", self.z),
-
-            tf.summary.image("G_vort", self.G_vort),
-            tf.summary.image("G_div", self.G_div_),
-            tf.summary.image("G_z_div", self.G_z_div_),
-
-            tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),
-            tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
-            
-            tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
-            tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
-            tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
-            tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
         ]
 
         if self.use_c:
             summary += [
                 tf.summary.image("G_s", self.G_s),
+            ]
+        else:
+            summary += [
+                tf.summary.image("G_div", self.G_div_),
+                tf.summary.image("G_z_div", self.G_z_div_),
+
+                tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
+                tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
+                tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
+                tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
             ]
 
         self.summary_op = tf.summary.merge(summary)
@@ -250,6 +259,7 @@ class Trainer(object):
 
             if self.lr_update == 'cyclic' or self.lr_update == 'test':
                 g_lr = self.sess.run(self.g_lr_update)
+                # print(g_lr)
             elif step % self.lr_update_step == self.lr_update_step - 1:
                 self.sess.run(self.g_lr_update)
 

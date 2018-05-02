@@ -4,7 +4,7 @@ from ops import *
 slim = tf.contrib.slim
 
 def GeneratorBE(z, filters, output_shape, name='G',
-                num_conv=3, conv_k=3, skip_conn=True, act=lrelu, reuse=False):
+                num_conv=3, conv_k=3, last_k=5, skip_conn=True, act=lrelu, reuse=False):
     with tf.variable_scope(name, reuse=reuse) as vs:
         repeat_num = int(np.log2(output_shape[0])) - 2
         x0_shape = np.power(2, np.log2(output_shape[:2]) - (repeat_num - 1)).tolist()
@@ -27,7 +27,7 @@ def GeneratorBE(z, filters, output_shape, name='G',
                     # print('x0 shape', x0.get_shape())
                     x = tf.concat([x, x0], axis=-1)
 
-        out = conv2d(x, output_shape[-1], k=5, s=1) # final: 9, SRGAN
+        out = conv2d(x, output_shape[-1], k=last_k, s=1)
         # out = tf.clip_by_value(out, -1, 1)
 
     variables = tf.contrib.framework.get_variables(vs)

@@ -21,9 +21,10 @@ net_arg.add_argument('--res_z', type=int, default=96)
 net_arg.add_argument('--filters', type=int, default=128,
                      choices=[64, 128], help='n in the paper')
 net_arg.add_argument('--num_conv', type=int, default=5)
-net_arg.add_argument('--use_curl', type=str2bool, default=False)
+net_arg.add_argument('--last_k', type=int, default=5)
+net_arg.add_argument('--use_curl', type=str2bool, default=True)
 net_arg.add_argument('--w1', type=float, default=1.0)
-net_arg.add_argument('--w2', type=float, default=1.0)
+net_arg.add_argument('--w2', type=float, default=0.0)
 net_arg.add_argument('--archi', type=str, default='de', choices=['de']) # dg
 
 # Data
@@ -40,10 +41,9 @@ train_arg.add_argument('--is_train', type=str2bool, default=True)
 train_arg.add_argument('--start_step', type=int, default=0)
 train_arg.add_argument('--max_step', type=int, default=300000)
 train_arg.add_argument('--lr_update_step', type=int, default=120000)
-train_arg.add_argument('--d_lr', type=float, default=0.0001)
 train_arg.add_argument('--g_lr', type=float, default=0.0001)
-train_arg.add_argument('--lr_upper_boundary', type=float, default=0.1)
-train_arg.add_argument('--lr_lower_boundary', type=float, default=0.000001)
+train_arg.add_argument('--lr_max', type=float, default=0.01)
+train_arg.add_argument('--lr_min', type=float, default=0.00001)
 train_arg.add_argument('--optimizer', type=str, default='adam',
                        choices=['adam', 'gd'])
 train_arg.add_argument('--beta1', type=float, default=0.5)

@@ -6,7 +6,22 @@ REM python main.py --archi=de --tag=uc5_11    --use_c=True --w1=1 --w2=1 --data_
 REM python main.py --archi=de --tag=uc3_10_64 --use_c=True --num_conv=3 --filters=64 --w1=1 --w2=0 --data_type=velocity --max_step=1000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
 REM python main.py --archi=de --tag=gd        --optimizer=gd --data_type=velocity --max_step=1000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
 REM python main.py --archi=de --tag=cy        --optimizer=gd --lr_update=cyclic --data_type=velocity --max_step=1000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
-python main.py --archi=de --tag=lr_test  --optimizer=gd --lr_update=test --data_type=velocity --log_step=1 --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+
+REM find optimal range (2-4 epoch)
+python main.py --archi=de --tag=lr_test_1e-5_1e-2_6k  --optimizer=adam --lr_update=test --lr_min=0.00001 --lr_max=0.01 --log_step=10 --use_curl=True --w2=0 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+
+REM python main.py --archi=de --tag=lr_test  --optimizer=gd --lr_update=test --lr_min=0.0001  --lr_max=0.05 --data_type=velocity --max_step=12000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test  --optimizer=gd --lr_update=test --lr_min=0.0005  --lr_max=0.10 --data_type=velocity --max_step=12000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test  --optimizer=gd --lr_update=test --lr_min=0.00005 --lr_max=0.05 --data_type=velocity --max_step=12000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_5e-4_5e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.0005  --lr_max=0.50 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_5e-5_5e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.00005 --lr_max=0.50 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_1e-5_5e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.00001 --lr_max=0.50 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_5e-4_2e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.0005  --lr_max=0.20 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_5e-5_2e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.00005 --lr_max=0.20 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_1e-5_2e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.00001 --lr_max=0.20 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_5e-4_1e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.0005  --lr_max=0.10 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_5e-5_1e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.00005 --lr_max=0.10 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+REM python main.py --archi=de --tag=lr_test_1e-5_1e-1_6k  --optimizer=gd --lr_update=test --lr_min=0.00001 --lr_max=0.10 --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
 
 REM gan
 REM python main.py --archi=dg --tag=11_0.001 --w1=1 --w2=1 --w_adv=0.001 --data_type=velocity --g_lr=0.00004 --dataset=smoke_pos10_f100 --height=128 --width=96
