@@ -52,8 +52,14 @@ class Trainer(object):
 
         self.lr_update = config.lr_update
         if self.lr_update == 'decay':
+            lr_min = config.lr_min
+            lr_max = config.lr_max
+            self.g_lr = tf.Variable(lr_min, name='g_lr')
+            self.g_lr_update = tf.assign(self.g_lr, 
+               lr_min+0.5*(lr_max-lr_min)*(tf.cos(tf.cast(self.step, tf.float32)*np.pi/self.max_step)+1), name='g_lr_update')
+        elif self.lr_update == 'step':
             self.g_lr = tf.Variable(config.g_lr, name='g_lr')
-            self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_min), name='g_lr_update')
+            self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_min), name='g_lr_update')    
         elif self.lr_update == 'cyclic':
             lr_min = config.lr_min
             lr_max = config.lr_max
@@ -73,7 +79,6 @@ class Trainer(object):
                10**(lr_min_l + (lr_max_l-lr_min_l)*tf.cast(self.step/self.max_step, tf.float32)), name='g_lr_update')
         else:
             raise Exception("[!] Invalid lr update method")
-
 
         self.lr_update_step = config.lr_update_step
         self.log_step = config.log_step
