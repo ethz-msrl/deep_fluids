@@ -54,7 +54,7 @@ class Trainer(object):
         if self.lr_update == 'decay':
             lr_min = config.lr_min
             lr_max = config.lr_max
-            self.g_lr = tf.Variable(lr_min, name='g_lr')
+            self.g_lr = tf.Variable(lr_max, name='g_lr')
             self.g_lr_update = tf.assign(self.g_lr, 
                lr_min+0.5*(lr_max-lr_min)*(tf.cos(tf.cast(self.step, tf.float32)*np.pi/self.max_step)+1), name='g_lr_update')
         elif self.lr_update == 'step':
@@ -310,13 +310,11 @@ class Trainer(object):
             if step % self.test_step == 0 or step == self.max_step-1:
                 self.generate(z_samples, self.model_dir, idx=step)
 
-            if self.lr_update == 'cyclic' or self.lr_update == 'test' or\
-               self.lr_update == 'freeze':
+            if self.lr_update == 'step' and step % self.lr_update_step == self.lr_update_step - 1:
+                self.sess.run(self.g_lr_update)
+            else:
                 g_lr = self.sess.run(self.g_lr_update)
                 # print(g_lr)
-
-            elif step % self.lr_update_step == self.lr_update_step - 1:
-                self.sess.run(self.g_lr_update)
 
         # save last checkpoint..
         save_path = os.path.join(self.model_dir, 'model.ckpt')
