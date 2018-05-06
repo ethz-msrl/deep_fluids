@@ -35,7 +35,7 @@ data_arg.add_argument('--num_worker', type=int, default=4)
 data_arg.add_argument('--data_type', type=str, default='velocity', 
                       choices=['velocity']) #,'stream','density','pressure','levelset'])
 data_arg.add_argument('--flow_type', type=str, default='smoke', 
-                      choices=['smoke', 'liquid'])
+                      choices=['smoke', 'liquid', 'ecmwf'])
 
 # Training / test parameters
 train_arg = add_argument_group('Training')
