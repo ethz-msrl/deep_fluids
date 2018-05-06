@@ -517,7 +517,7 @@ class Trainer(object):
             x_w = np.concatenate((x_w,x_w,x_w), axis=3)
             x = np.concatenate((x,x_w), axis=0)
 
-        save_image(x, x_path)
+        save_image(x, x_path, nrow=self.b_num)
         print("[*] Samples saved: {}".format(x_path))
 
     def to_vel(self, x):
