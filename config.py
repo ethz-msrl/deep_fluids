@@ -25,7 +25,7 @@ net_arg.add_argument('--last_k', type=int, default=3)
 net_arg.add_argument('--use_curl', type=str2bool, default=True)
 net_arg.add_argument('--w1', type=float, default=1.0)
 net_arg.add_argument('--w2', type=float, default=0.0)
-net_arg.add_argument('--archi', type=str, default='de', choices=['de']) # dg
+net_arg.add_argument('--archi', type=str, default='de', choices=['de']) # dg, ae, nn
 
 # Data
 data_arg = add_argument_group('Data')
@@ -34,6 +34,8 @@ data_arg.add_argument('--batch_size', type=int, default=8)
 data_arg.add_argument('--num_worker', type=int, default=4)
 data_arg.add_argument('--data_type', type=str, default='velocity', 
                       choices=['velocity']) #,'stream','density','pressure','levelset'])
+data_arg.add_argument('--flow_type', type=str, default='smoke', 
+                      choices=['smoke', 'liquid'])
 
 # Training / test parameters
 train_arg = add_argument_group('Training')
@@ -58,7 +60,7 @@ misc_arg.add_argument('--log_dir', type=str, default='log')
 misc_arg.add_argument('--tag', type=str, default='test')
 misc_arg.add_argument('--data_dir', type=str, default='data')
 misc_arg.add_argument('--load_path', type=str, default='')
-misc_arg.add_argument('--log_step', type=int, default=100)
+misc_arg.add_argument('--log_step', type=int, default=500)
 misc_arg.add_argument('--test_step', type=int, default=1000)
 misc_arg.add_argument('--save_sec', type=int, default=3600)
 misc_arg.add_argument('--test_batch_size', type=int, default=100)
