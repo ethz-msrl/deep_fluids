@@ -227,7 +227,7 @@ class Trainer(object):
         x_w = self.get_vort_image(x/127.5-1, is_vel=True)
         x_w = np.concatenate((x_w,x_w,x_w), axis=3)
         x = np.concatenate((x,x_w), axis=0)
-        save_image(x, '{}/x_fixed_gt.png'.format(self.model_dir))
+        save_image(x, '{}/x_fixed_gt.png'.format(self.model_dir), nrow=self.b_num)
 
         with open('{}/x_fixed_gt.txt'.format(self.model_dir), 'w') as f:
             f.write(str(pi) + '\n')

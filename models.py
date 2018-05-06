@@ -8,7 +8,7 @@ def GeneratorBE(z, filters, output_shape, name='G',
     with tf.variable_scope(name, reuse=reuse) as vs:
         repeat_num = int(np.log2(output_shape[0])) - 2
         x0_shape = np.power(2, np.log2(output_shape[:2]) - (repeat_num - 1)).tolist()
-        x0_shape = [int(i) for i in x0_shape] + [filters]
+        x0_shape = [int(np.round(i)) for i in x0_shape] + [filters]
         # print(x0_shape, output_shape)
         num_output = int(np.prod(x0_shape))
         x = linear(z, num_output)

@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from itertools import product
-from utils import streamplot, vortplot
+from utils import streamplot, vortplot, convert_png2mp4
 
 from ops import *
 
@@ -428,6 +428,28 @@ def test2d(config):
         f.write(str(pi))
         f.write(str(zi))
 
+    # ecmwf_era_interim
+    p_list = []
+    for p2 in range(31):
+        for p3 in range(4): # because of overlap between 24 and next 0
+            p_list.append([p2, p3])
+
+    f_list = batch_manager.list_from_p(p_list)
+    
+    img_dir = os.path.join(config.data_path, 'img')
+    if not os.path.exists(img_dir):
+        os.makedirs(img_dir)
+
+    for i, file_path in enumerate(f_list):
+        x, _ = preprocess(file_path, batch_manager.data_type, batch_manager.x_range, batch_manager.y_range)
+        # x = x[::-1,:] # flip...
+        img_path = os.path.join(img_dir, '%05d.png' % i)
+        vortplot(x, img_path)
+
+    mp4_path = os.path.join(config.data_path, '2017_01.mp4')
+    fps = 10
+    convert_png2mp4(img_dir, mp4_path, fps)
+
 def test3d(config):
     prepare_dirs_and_logger(config)
     tf.set_random_seed(config.random_seed)
@@ -478,9 +500,12 @@ if __name__ == "__main__":
     # setattr(config, 'dataset', 'smoke_pos21_size5_f200')
     # setattr(config, 'res_x', 96)
     # setattr(config, 'res_y', 128)
-    setattr(config, 'dataset', 'liquid_pos10_size4_f200')
-    setattr(config, 'res_x', 128)
-    setattr(config, 'res_y', 64)
+    # setattr(config, 'dataset', 'liquid_pos10_size4_f200')
+    # setattr(config, 'res_x', 128)
+    # setattr(config, 'res_y', 64)
+    setattr(config, 'dataset', 'ecmwf_era_interim')
+    setattr(config, 'res_x', 480)
+    setattr(config, 'res_y', 240)
     data_types = ['velocity']
 
     for data_type in data_types:
