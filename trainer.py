@@ -77,6 +77,8 @@ class Trainer(object):
             # print(lr_min_l, lr_max_l)
             self.g_lr_update = tf.assign(self.g_lr, 
                10**(lr_min_l + (lr_max_l-lr_min_l)*tf.cast(self.step/self.max_step, tf.float32)), name='g_lr_update')
+        elif self.lr_update == 'freeze':
+            self.lr_max = config.lr_max
         else:
             raise Exception("[!] Invalid lr update method")
 
@@ -110,6 +112,10 @@ class Trainer(object):
         if self.is_train:
             self.batch_manager.start_thread(self.sess)
 
+        # dirty way to bypass graph finilization error
+        g = tf.get_default_graph()
+        g._finalized = False
+
     def build_model(self):
         if self.use_c:
             self.G_s, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, 
@@ -141,14 +147,36 @@ class Trainer(object):
         
         show_all_variables()
 
-        if self.optimizer == 'adam':
-            optimizer = tf.train.AdamOptimizer
-            g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
-        elif self.optimizer == 'gd':
-            optimizer = tf.train.GradientDescentOptimizer
-            g_optimizer = optimizer(self.g_lr)
+        if self.lr_update == 'freeze':
+            num_layers = int(self.G_var[-1].name.split('_')[0].split('/')[1])+1
+            layers = []
+            t0 = 0.5 # 0.5 for linear
+            is_cubic = True
+            t_ = np.linspace(t0, 1, num_layers, dtype=np.float32)
+            if is_cubic: t_ = np.power(t_, 3)
+            self.max_steps = (self.max_step * t_).astype(np.int)
+            a_ = self.lr_max / t_
+            self.g_lr_update = []
+            for i in range(num_layers):
+                g_vars = [var for var in self.G_var if '/{}_'.format(i) in var.name]
+                lr = tf.Variable(a_[i], name='lr%02d' % i)
+                layers.append({
+                    'v': g_vars, 
+                    'lr': lr,
+                })
+                lr_update = tf.assign(lr,
+                    0.5*a_[i]*(tf.cos(tf.cast(self.step, tf.float32)*np.pi/self.max_steps[i])+1))
+                self.g_lr_update.append(lr_update)
+            self.max_steps = self.max_steps.tolist()
         else:
-            raise Exception("[!] Invalid opimizer")
+            if self.optimizer == 'adam':
+                optimizer = tf.train.AdamOptimizer
+                g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
+            elif self.optimizer == 'gd':
+                optimizer = tf.train.GradientDescentOptimizer
+                g_optimizer = optimizer(self.g_lr)
+            else:
+                raise Exception("[!] Invalid opimizer")
 
         # losses
         self.g_loss_l1 = tf.reduce_mean(tf.abs(self.G_ - self.x))
@@ -162,7 +190,18 @@ class Trainer(object):
 
         self.g_loss = self.g_loss_l1*self.w1 + self.g_loss_j_l1*self.w2
 
-        self.g_optim = g_optimizer.minimize(self.g_loss, global_step=self.step, var_list=self.G_var)
+        if self.lr_update == 'freeze':
+            self.opts = []
+            for i in range(num_layers):
+                grad = tf.gradients(self.g_loss, layers[i]['v'])
+                opt = tf.train.AdamOptimizer(layers[i]['lr'], beta1=self.beta1, beta2=self.beta2)
+                if i == num_layers-1:
+                    self.opts.append(opt.apply_gradients(zip(grad, layers[i]['v']), global_step=self.step))
+                else:
+                    self.opts.append(opt.apply_gradients(zip(grad, layers[i]['v'])))
+            self.g_optim = tf.group(self.opts)
+        else:
+            self.g_optim = g_optimizer.minimize(self.g_loss, global_step=self.step, var_list=self.G_var)
         self.epoch = tf.placeholder(tf.float32)
 
         # summary
@@ -184,7 +223,6 @@ class Trainer(object):
             tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
             tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
 
-            tf.summary.scalar("misc/g_lr", self.g_lr),
             tf.summary.scalar("misc/epoch", self.epoch),
             tf.summary.scalar('misc/q', self.batch_manager.q.size()),
 
@@ -195,6 +233,14 @@ class Trainer(object):
         if self.use_c:
             summary += [
                 tf.summary.image("G_s", self.G_s),
+            ]
+
+        if self.lr_update == 'freeze':
+            for i in range(num_layers):
+                summary.append(tf.summary.scalar("g_lr/%02d" % i, layers[i]['lr']))
+        else:
+            summary += [
+                tf.summary.scalar("misc/g_lr", self.g_lr),
             ]
 
         self.summary_op = tf.summary.merge(summary)
@@ -245,6 +291,10 @@ class Trainer(object):
         
         # train
         for step in trange(self.start_step, self.max_step):
+            if self.lr_update == 'freeze' and step == self.max_steps[0]:
+                self.max_steps.pop(0)
+                self.opts.pop(0)
+                self.g_optim = tf.group(self.opts)
             self.sess.run(self.g_optim)
 
             if step % self.log_step == 0 or step == self.max_step-1:
@@ -260,9 +310,11 @@ class Trainer(object):
             if step % self.test_step == 0 or step == self.max_step-1:
                 self.generate(z_samples, self.model_dir, idx=step)
 
-            if self.lr_update == 'cyclic' or self.lr_update == 'test':
+            if self.lr_update == 'cyclic' or self.lr_update == 'test' or\
+               self.lr_update == 'freeze':
                 g_lr = self.sess.run(self.g_lr_update)
                 # print(g_lr)
+
             elif step % self.lr_update_step == self.lr_update_step - 1:
                 self.sess.run(self.g_lr_update)
 
@@ -279,10 +331,6 @@ class Trainer(object):
         self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
 
     def test(self):
-        # dirty way to bypass graph finilization error
-        g = tf.get_default_graph()
-        g._finalized = False
-
         self.build_test_model(self.test_batch_size)
 
         intv = self.test_intv

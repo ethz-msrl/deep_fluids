@@ -51,7 +51,7 @@ train_arg.add_argument('--optimizer', type=str, default='adam',
 train_arg.add_argument('--beta1', type=float, default=0.5)
 train_arg.add_argument('--beta2', type=float, default=0.999)
 train_arg.add_argument('--lr_update', type=str, default='decay',
-                       choices=['decay', 'step', 'cyclic', 'test'])
+                       choices=['decay', 'step', 'cyclic', 'test', 'freeze'])
 train_arg.add_argument('--num_cycle', type=float, default=5)
 
 # Misc

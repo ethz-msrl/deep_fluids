@@ -11,13 +11,16 @@ def GeneratorBE(z, filters, output_shape, name='G',
         x0_shape = [int(np.round(i)) for i in x0_shape] + [filters]
         # print(x0_shape, output_shape)
         num_output = int(np.prod(x0_shape))
-        x = linear(z, num_output)
+        layer_num = 0
+        x = linear(z, num_output, name=str(layer_num)+'_fc')
+        layer_num += 1
         x = reshape(x, x0_shape[0], x0_shape[1], x0_shape[2])
         if skip_conn: x0 = x
         
         for idx in range(repeat_num):
             for _ in range(num_conv):
-                x = conv2d(x, filters, k=conv_k, s=1, act=act)
+                x = conv2d(x, filters, k=conv_k, s=1, act=act, name=str(layer_num)+'_conv')
+                layer_num += 1
 
             if idx < repeat_num - 1:
                 x = upscale(x, 2)
@@ -27,7 +30,7 @@ def GeneratorBE(z, filters, output_shape, name='G',
                     # print('x0 shape', x0.get_shape())
                     x = tf.concat([x, x0], axis=-1)
 
-        out = conv2d(x, output_shape[-1], k=last_k, s=1)
+        out = conv2d(x, output_shape[-1], k=last_k, s=1, name=str(layer_num)+'_conv')
         # out = tf.clip_by_value(out, -1, 1)
 
     variables = tf.contrib.framework.get_variables(vs)
