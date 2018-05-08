@@ -14,6 +14,8 @@ def conv2d(x, o_dim, data_format='NHWC', name=None, k=4, s=2, act=None):
 
 def conv3d(x, o_dim, data_format='NDHWC', name=None, k=4, s=2, act=None):
     return slim.conv3d(x, o_dim, k, stride=s, activation_fn=act, scope=name, data_format=data_format)
+    # return tf.layers.conv3d(x, o_dim, k, (s,s,s), 'SAME', activation=act, name=name,
+    #                         kernel_initializer=tf.contrib.layers.xavier_initializer())
 
 def deconv2d(x, o_dim, data_format='NHWC', name=None, k=4, s=2, act=None):
     return slim.conv2d_transpose(x, o_dim, k, stride=s, activation_fn=act, scope=name, data_format=data_format)
