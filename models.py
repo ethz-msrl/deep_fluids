@@ -3,7 +3,7 @@ import tensorflow as tf
 from ops import *
 
 def GeneratorBE(z, filters, output_shape, name='G',
-                num_conv=5, conv_k=3, last_k=3, repeat=0, skip_conn=True, act=lrelu, reuse=False):
+                num_conv=5, conv_k=3, last_k=3, repeat=0, skip_concat=True, act=lrelu, reuse=False):
     with tf.variable_scope(name, reuse=reuse) as vs:
         # repeat_num = int(np.log2(output_shape[0])) - 2
         # assert(repeat_num > 0)
@@ -25,7 +25,7 @@ def GeneratorBE(z, filters, output_shape, name='G',
         x = linear(z, num_output, name=str(layer_num)+'_fc')
         layer_num += 1
         x = reshape(x, x0_shape[0], x0_shape[1], x0_shape[2])
-        if skip_conn: x0 = x
+        x0 = x
         
         for idx in range(repeat_num):
             for _ in range(num_conv):
@@ -33,13 +33,15 @@ def GeneratorBE(z, filters, output_shape, name='G',
                 layer_num += 1
 
             if idx < repeat_num - 1:
-                x = upscale(x, 2)
-                # print('x shape', x.get_shape())
-                if skip_conn:
+                if skip_concat:
+                    x = upscale(x, 2)
                     x0 = upscale(x0, 2)
-                    # print('x0 shape', x0.get_shape())
                     x = tf.concat([x, x0], axis=-1)
-
+                else:
+                    x += x0
+                    x = upscale(x, 2)
+                    x0 = x
+        
         out = conv2d(x, output_shape[-1], k=last_k, s=1, name=str(layer_num)+'_conv')
         # out = tf.clip_by_value(out, -1, 1)
 
@@ -47,7 +49,7 @@ def GeneratorBE(z, filters, output_shape, name='G',
     return out, variables
 
 def GeneratorBE3(z, filters, output_shape, name='G',
-                num_conv=5, conv_k=3, last_k=3, repeat=0, skip_conn=True, act=lrelu, reuse=False):
+                num_conv=5, conv_k=3, last_k=3, repeat=0, skip_concat=True, act=lrelu, reuse=False):
     with tf.variable_scope(name, reuse=reuse) as vs:
         if repeat == 0:
             repeat_num = int(np.log2(np.max(output_shape[:-1]))) - 2
@@ -62,7 +64,7 @@ def GeneratorBE3(z, filters, output_shape, name='G',
         x = linear(z, num_output, name=str(layer_num)+'_fc')
         layer_num += 1
         x = tf.reshape(x, [-1] + x0_shape)
-        if skip_conn: x0 = x
+        x0 = x
         
         for idx in range(repeat_num):
             for _ in range(num_conv):
@@ -70,13 +72,15 @@ def GeneratorBE3(z, filters, output_shape, name='G',
                 layer_num += 1
 
             if idx < repeat_num - 1:
-                x = upscale3(x, 2)
-                # print('x shape', x.get_shape())
-                if skip_conn:
+                if skip_concat:
+                    x = upscale3(x, 2)
                     x0 = upscale3(x0, 2)
-                    # print('x0 shape', x0.get_shape())
                     x = tf.concat([x, x0], axis=-1)
-
+                else:
+                    x += x0
+                    x = upscale3(x, 2)
+                    x0 = x
+                    
         out = conv3d(x, output_shape[-1], k=last_k, s=1, name=str(layer_num)+'_conv')
 
     variables = tf.contrib.framework.get_variables(vs)

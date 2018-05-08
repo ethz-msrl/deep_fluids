@@ -11,17 +11,18 @@ from utils import save_image, convert_png2mp4, streamplot, vortplot, gradplot, j
 from trainer import Trainer
 
 class Trainer3(Trainer):
-    # def __init__(self, config, batch_manager):
-    #     Trainer.__init__(self, config, batch_manager)
-
     def build_model(self):
         if self.use_c:
             self.G_s, self.G_var = GeneratorBE3(self.y, self.filters, self.output_shape, 
-                                               num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat)
+                                               num_conv=self.num_conv, last_k=self.last_k,
+                                               repeat=self.repeat, skip_concat=self.skip_concat,
+                                               act=self.act)
             _, self.G_ = jacobian3(self.G_s)
         else:
             self.G_, self.G_var = GeneratorBE3(self.y, self.filters, self.output_shape,
-                                              num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat)
+                                              num_conv=self.num_conv, last_k=self.last_k, 
+                                              repeat=self.repeat, skip_concat=self.skip_concat,
+                                              act=self.act)
         self.G = denorm_img3(self.G_) # for debug
 
         self.G_jaco_, self.G_vort_ = jacobian3(self.G_)
@@ -32,11 +33,15 @@ class Trainer3(Trainer):
         self.z = tf.random_uniform(shape=[self.b_num, self.c_num], minval=-1.0, maxval=1.0)
         if self.use_c:
             self.G_z_s, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
-                                        num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
+                                        num_conv=self.num_conv, last_k=self.last_k,
+                                        repeat=self.repeat, skip_concat=self.skip_concat,
+                                        act=self.act, reuse=True)
             _, self.G_z_ = jacobian3(self.G_z_s)
         else:
             self.G_z_, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
+                                       num_conv=self.num_conv, last_k=self.last_k,
+                                       repeat=self.repeat, skip_concat=self.skip_concat,
+                                       act=self.act, reuse=True)
         self.G_z = denorm_img3(self.G_z_) # for debug
 
         self.G_z_jaco_, self.G_z_vort_ = jacobian3(self.G_z_)
@@ -259,11 +264,15 @@ class Trainer3(Trainer):
         self.zt = tf.placeholder(dtype=tf.float32, shape=[b_num, self.c_num])
         if self.use_c:
             self.Gt_s, _ = GeneratorBE3(self.zt, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
+                                       num_conv=self.num_conv, last_k=self.last_k,
+                                       repeat=self.repeat, skip_concat=self.skip_concat,
+                                       act=self.act, reuse=True)
             _, self.Gt_ = jacobian3(self.Gt_s)
         else:
             self.Gt_, _ = GeneratorBE3(self.zt, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
+                                       num_conv=self.num_conv, last_k=self.last_k,
+                                       repeat=self.repeat, skip_concat=self.skip_concat,
+                                       act=self.act, reuse=True)
         self.Gt = denorm_img3(self.Gt_) # for debug
 
         _, self.Gt_vort_ = jacobian3(self.Gt_)

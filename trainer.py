@@ -35,8 +35,16 @@ class Trainer(object):
         self.filters = config.filters
         self.num_conv = config.num_conv
         self.last_k = config.last_k
+        self.skip_concat = config.skip_concat
+        if config.act == 'lrelu':
+            self.act = lrelu
+        elif config.act == 'elu':
+            self.act = tf.nn.elu
+        else:
+            self.act = tf.nn.softsign
         self.w1 = config.w1
         self.w2 = config.w2
+
         self.use_c = config.use_curl
         if self.use_c:
             if self.is_3d:
@@ -129,11 +137,15 @@ class Trainer(object):
     def build_model(self):
         if self.use_c:
             self.G_s, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, 
-                                               num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat)
+                                               num_conv=self.num_conv, last_k=self.last_k,
+                                               repeat=self.repeat, skip_concat=self.skip_concat,
+                                               act=self.act)
             self.G_ = curl(self.G_s)
         else:
             self.G_, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape,
-                                              num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat)
+                                              num_conv=self.num_conv, last_k=self.last_k,
+                                              repeat=self.repeat, skip_concat=self.skip_concat,
+                                              act=self.act)
         self.G = denorm_img(self.G_) # for debug
 
         self.G_jaco_, self.G_vort_ = jacobian(self.G_)
@@ -144,11 +156,15 @@ class Trainer(object):
         self.z = tf.random_uniform(shape=[self.b_num, self.c_num], minval=-1.0, maxval=1.0)
         if self.use_c:
             self.G_z_s, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                        num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
+                                        num_conv=self.num_conv, last_k=self.last_k,
+                                        repeat=self.repeat, skip_concat=self.skip_concat,
+                                        act=self.act, reuse=True)
             self.G_z_ = curl(self.G_z_s)
         else:
             self.G_z_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
+                                       num_conv=self.num_conv, last_k=self.last_k,
+                                       repeat=self.repeat, skip_concat=self.skip_concat,
+                                       act=self.act, reuse=True)
         self.G_z = denorm_img(self.G_z_) # for debug
 
         self.G_z_jaco_, self.G_z_vort_ = jacobian(self.G_z_)
@@ -336,7 +352,9 @@ class Trainer(object):
         self.b_num = b_num
         self.z = tf.placeholder(dtype=tf.float32, shape=[self.b_num, self.c_num])
         self.G_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                 num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
+                                 num_conv=self.num_conv, last_k=self.last_k,
+                                 repeat=self.repeat, skip_concat=self.skip_concat,
+                                 act=self.act, reuse=True)
         self.G = denorm_img(self.G_) # for debug
         self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
 

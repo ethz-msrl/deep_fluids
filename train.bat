@@ -1,5 +1,5 @@
 REM 3d
-python main.py --title=lr_test --tag=2e-4_1e-6  --optimizer=adam --lr_update=test --lr_min=0.000001 --lr_max=0.0002 --log_step=10 --max_step=2000 --is_3d=True --res_x=112 --res_y=64 --res_z=32 --dataset=smoke3_vel5_buo3_f250 --batch_size=4 --num_worker=1 --test_batch_size=5
+REM python main.py --title=lr_test --tag=2e-4_1e-6  --optimizer=adam --lr_update=test --lr_min=0.000001 --lr_max=0.0002 --log_step=10 --max_step=2000 --is_3d=True --res_x=112 --res_y=64 --res_z=32 --dataset=smoke3_vel5_buo3_f250 --batch_size=4 --num_worker=1 --test_batch_size=5
 
 REM python main.py --dataset=ecmwf_era_interim --res_x=480 --res_y=240 --batch_size=6 --repeat=5
 
@@ -13,7 +13,8 @@ REM python main.py --archi=de --tag=gd        --optimizer=gd --data_type=velocit
 REM python main.py --archi=de --tag=cy        --optimizer=gd --lr_update=cyclic --data_type=velocity --max_step=1000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
 
 REM find optimal range (2-4 epoch)
-REM python main.py --archi=de --tag=lr_test_adam_1e-6_1e-3_6k  --optimizer=adam --lr_update=test --lr_min=0.000001 --lr_max=0.0005 --log_step=10 --use_curl=True --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
+python main.py --title=skip_new --tag=test --num_conv=3
+REM python main.py --title=lr_test --tag=2e-4_6k_1e-6  --optimizer=adam --lr_update=test --lr_min=0.000001 --lr_max=0.0002 --log_step=10 --use_curl=True --data_type=velocity --max_step=6000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
 
 REM python main.py --archi=de --tag=lr_test  --optimizer=gd --lr_update=test --lr_min=0.0001  --lr_max=0.05 --data_type=velocity --max_step=12000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
 REM python main.py --archi=de --tag=lr_test  --optimizer=gd --lr_update=test --lr_min=0.0005  --lr_max=0.10 --data_type=velocity --max_step=12000 --dataset=smoke_pos21_size5_f200 --height=128 --width=96
