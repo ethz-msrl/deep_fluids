@@ -16,11 +16,14 @@ class Trainer(object):
         self.batch_manager = batch_manager
         self.x, self.y = batch_manager.batch() # normalized input
 
+        self.is_3d = config.is_3d
         self.dataset = config.dataset
         self.data_type = config.data_type
-        self.x_jaco, self.x_vort = jacobian(self.x)
+        if self.is_3d:
+            self.x_jaco, self.x_vort = jacobian3(self.x)
+        else:
+            self.x_jaco, self.x_vort = jacobian(self.x)
 
-        self.is_3d = config.is_3d
         self.archi = config.archi
         self.res_x = config.res_x
         self.res_y = config.res_y
@@ -28,6 +31,7 @@ class Trainer(object):
         self.c_num = batch_manager.c_num
         self.b_num = config.batch_size
 
+        self.repeat = config.repeat
         self.filters = config.filters
         self.num_conv = config.num_conv
         self.last_k = config.last_k
@@ -35,7 +39,10 @@ class Trainer(object):
         self.w2 = config.w2
         self.use_c = config.use_curl
         if self.use_c:
-            self.output_shape = get_conv_shape(self.x)[1:3] + [1]
+            if self.is_3d:
+                self.output_shape = get_conv_shape(self.x)[1:-1] + [3]
+            else:
+                self.output_shape = get_conv_shape(self.x)[1:-1] + [1]
         else:
             self.output_shape = get_conv_shape(self.x)[1:]
 
@@ -58,7 +65,7 @@ class Trainer(object):
             self.g_lr_update = tf.assign(self.g_lr, 
                lr_min+0.5*(lr_max-lr_min)*(tf.cos(tf.cast(self.step, tf.float32)*np.pi/self.max_step)+1), name='g_lr_update')
         elif self.lr_update == 'step':
-            self.g_lr = tf.Variable(config.g_lr, name='g_lr')
+            self.g_lr = tf.Variable(config.lr_max, name='g_lr')
             self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_min), name='g_lr_update')    
         elif self.lr_update == 'cyclic':
             lr_min = config.lr_min
@@ -92,6 +99,9 @@ class Trainer(object):
         self.is_train = config.is_train
         self.build_model()
 
+        if self.is_3d:
+            self.build_test_model(self.test_batch_size)
+
         self.saver = tf.train.Saver(max_to_keep=1000)
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
 
@@ -119,11 +129,11 @@ class Trainer(object):
     def build_model(self):
         if self.use_c:
             self.G_s, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, 
-                                               num_conv=self.num_conv, last_k=self.last_k)
+                                               num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat)
             self.G_ = curl(self.G_s)
         else:
             self.G_, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape,
-                                              num_conv=self.num_conv, last_k=self.last_k)
+                                              num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat)
         self.G = denorm_img(self.G_) # for debug
 
         self.G_jaco_, self.G_vort_ = jacobian(self.G_)
@@ -134,11 +144,11 @@ class Trainer(object):
         self.z = tf.random_uniform(shape=[self.b_num, self.c_num], minval=-1.0, maxval=1.0)
         if self.use_c:
             self.G_z_s, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                        num_conv=self.num_conv, last_k=self.last_k, reuse=True)
+                                        num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
             self.G_z_ = curl(self.G_z_s)
         else:
             self.G_z_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k, reuse=True)
+                                       num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
         self.G_z = denorm_img(self.G_z_) # for debug
 
         self.G_z_jaco_, self.G_z_vort_ = jacobian(self.G_z_)
@@ -310,8 +320,9 @@ class Trainer(object):
             if step % self.test_step == 0 or step == self.max_step-1:
                 self.generate(z_samples, self.model_dir, idx=step)
 
-            if self.lr_update == 'step' and step % self.lr_update_step == self.lr_update_step - 1:
-                self.sess.run(self.g_lr_update)
+            if self.lr_update == 'step':
+                if step % self.lr_update_step == self.lr_update_step - 1:
+                    self.sess.run(self.g_lr_update)
             else:
                 g_lr = self.sess.run(self.g_lr_update)
                 # print(g_lr)
@@ -324,7 +335,8 @@ class Trainer(object):
     def build_test_model(self, b_num):
         self.b_num = b_num
         self.z = tf.placeholder(dtype=tf.float32, shape=[self.b_num, self.c_num])
-        self.G_, _ = GeneratorBE(self.z, self.filters, self.output_shape, reuse=True)
+        self.G_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
+                                 num_conv=self.num_conv, last_k=self.last_k, repeat=self.repeat, reuse=True)
         self.G = denorm_img(self.G_) # for debug
         self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
 

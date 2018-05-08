@@ -58,7 +58,10 @@ class BatchManager(object):
             feature_dim = [self.res_y, self.res_x, self.depth]
         label_dim = [self.c_num]
 
-        min_after_dequeue = 5000
+        if self.is_3d:
+            min_after_dequeue = 500
+        else:
+            min_after_dequeue = 5000
         capacity = min_after_dequeue + 3 * self.batch_size
         self.q = tf.FIFOQueue(capacity, [tf.float32, tf.float32], [feature_dim, label_dim])
         self.x = tf.placeholder(dtype=tf.float32, shape=feature_dim)
@@ -263,7 +266,7 @@ class BatchManager(object):
             if self.data_type == 'velocity':
                 # vorticity
                 x_c = np.expand_dims(x, axis=0)
-                _, x_c = jacobian_np(x_c)
+                _, x_c = jacobian_np3(x_c)
                 x_c = self.to_vel(x_c)
 
                 x_c = np.squeeze(x_c, axis=0)
@@ -280,11 +283,11 @@ class BatchManager(object):
             elif self.data_type == 'stream':
                 # velocity
                 x_c = np.expand_dims(x, axis=0)
-                _, x_c = jacobian_np(x_c)
+                _, x_c = jacobian_np3(x_c)
                 x_c = self.to_vel(x_c)
 
                 # vorticity
-                _, x_w = jacobian_np(x_c)
+                _, x_w = jacobian_np3(x_c)
 
                 x_c = np.squeeze(x_c, axis=0)
                 xy_c = plane_view_np(x_c, xy_plane=True, project=True)
@@ -455,7 +458,7 @@ def test3d(config):
     tf.set_random_seed(config.random_seed)
 
     batch_manager = BatchManager(config)
-    x, _ = preprocess('data/smoke3_pos10_f100/v/4_50.npz', 'velocity', batch_manager.x_range, batch_manager.y_range)
+    x, _ = preprocess('data/smoke3_vel5_buo3_f250/v/3_2_150.npz', 'velocity', batch_manager.x_range, batch_manager.y_range)
 
     # batch test
     sess_config = tf.ConfigProto()
@@ -494,34 +497,34 @@ if __name__ == "__main__":
     from config import get_config
     from utils import prepare_dirs_and_logger, save_config, save_image
 
+    ##############
     # test: 2d
-    config, unparsed = get_config()
-    setattr(config, 'is_3d', False)
+    # config, unparsed = get_config()
+    # setattr(config, 'is_3d', False)
     # setattr(config, 'dataset', 'smoke_pos21_size5_f200')
     # setattr(config, 'res_x', 96)
     # setattr(config, 'res_y', 128)
     # setattr(config, 'dataset', 'liquid_pos10_size4_f200')
     # setattr(config, 'res_x', 128)
     # setattr(config, 'res_y', 64)
-    setattr(config, 'dataset', 'ecmwf_era_interim')
-    setattr(config, 'res_x', 480)
-    setattr(config, 'res_y', 240)
-    data_types = ['velocity']
-
-    for data_type in data_types:
-        setattr(config, 'data_type', data_type)
-        test2d(config)
-
-    # # test: 3d
-    # config, unparsed = get_config()
-    # setattr(config, 'is_3d', True)
-    # setattr(config, 'dataset', 'smoke3_pos10_f100')
-    # setattr(config, 'res_x', 48)
-    # setattr(config, 'res_y', 64)
-    # setattr(config, 'res_z', 48)
-    # setattr(config, 'batch_size', 4)
-    # data_types = ['velocity']
-
-    # for data_type in data_types:
+    # setattr(config, 'dataset', 'ecmwf_era_interim')
+    # setattr(config, 'res_x', 480)
+    # setattr(config, 'res_y', 240)
+    # for data_type in ['velocity']:
     #     setattr(config, 'data_type', data_type)
-    #     test3d(config)
+    #     test2d(config)
+    ##############
+
+    ##############
+    # test: 3d
+    config, unparsed = get_config()
+    setattr(config, 'is_3d', True)
+    setattr(config, 'dataset', 'smoke3_vel5_buo3_f250')
+    setattr(config, 'res_x', 112)
+    setattr(config, 'res_y', 64)
+    setattr(config, 'res_z', 32)
+    setattr(config, 'batch_size', 4)
+    for data_type in ['velocity']:
+        setattr(config, 'data_type', data_type)
+        test3d(config)
+    ##############

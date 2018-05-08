@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
+from trainer3 import Trainer3
 from trainer import Trainer
 from data import BatchManager
 from config import get_config
@@ -11,7 +12,10 @@ def main(config):
     tf.set_random_seed(config.random_seed)
 
     batch_manager = BatchManager(config)
-    trainer = Trainer(config, batch_manager)
+    if config.is_3d:
+        trainer = Trainer3(config, batch_manager)
+    else:
+        trainer = Trainer(config, batch_manager)
 
     if config.is_train:
         save_config(config)

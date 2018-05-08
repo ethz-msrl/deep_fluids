@@ -1,4 +1,6 @@
-..\manta\build_nogui\Release\manta.exe ./scene/smoke_mov.py
+..\manta\build_nogui_vdb\Release\manta.exe ./scene/smoke3_vel_buo.py 
+
+REM ..\manta\build_nogui\Release\manta.exe ./scene/smoke_mov.py
 
 REM ..\manta\build\Release\manta.exe ./scene/smoke_plume.py --data_gen=False
 REM ..\manta\build\Release\manta.exe ./scene/smoke_jet.py --data_gen=False
