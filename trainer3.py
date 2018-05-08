@@ -206,8 +206,8 @@ class Trainer3(Trainer):
         gen_list = self.batch_manager.random_list(self.test_batch_size)
         x_xy = np.concatenate((gen_list['xym'],gen_list['xym_c']), axis=0)
         x_zy = np.concatenate((gen_list['zym'],gen_list['zym_c']), axis=0)
-        save_image(x_xy, '{}/x_xy_fixed_gt.png'.format(self.model_dir), padding=1, nrow=self.test_batch_size)
-        save_image(x_zy, '{}/x_zy_fixed_gt.png'.format(self.model_dir), padding=1, nrow=self.test_batch_size)
+        save_image(x_xy, '{}/x_fixed_xym_gt.png'.format(self.model_dir), padding=1, nrow=self.test_batch_size)
+        save_image(x_zy, '{}/x_fixed_zym_gt.png'.format(self.model_dir), padding=1, nrow=self.test_batch_size)
         with open('{}/x_fixed_gt.txt'.format(self.model_dir), 'w') as f:
             f.write(str(gen_list['p']) + '\n')
             f.write(str(gen_list['z']))
@@ -306,11 +306,11 @@ class Trainer3(Trainer):
             print("[*] Samples saved: {}".format(c_path))
 
         gen_random = np.concatenate(tuple(xym_list[-2:]), axis=0)
-        x_xy_path = os.path.join(root_path, 'x_fixed_xym{}.png'.format(idx))
+        x_xy_path = os.path.join(root_path, 'x_fixed_xym_{}.png'.format(idx))
         save_image(gen_random, x_xy_path, nrow=self.test_batch_size, padding=1)
         print("[*] Samples saved: {}".format(x_xy_path))
 
         gen_random = np.concatenate(tuple(zym_list[-2:]), axis=0)
-        x_zy_path = os.path.join(root_path, 'x_fixed_zym{}.png'.format(idx))
+        x_zy_path = os.path.join(root_path, 'x_fixed_zym_{}.png'.format(idx))
         save_image(gen_random, x_zy_path, nrow=self.test_batch_size, padding=1)
         print("[*] Samples saved: {}".format(x_zy_path))
