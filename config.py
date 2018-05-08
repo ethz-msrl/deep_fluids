@@ -32,7 +32,7 @@ net_arg.add_argument('--archi', type=str, default='de', choices=['de']) # dg, ae
 data_arg = add_argument_group('Data')
 data_arg.add_argument('--dataset', type=str, default='smoke_pos21_size5_f200') # smoke_pos21_size5_f200, smoke3_vel5_buo3_f250
 data_arg.add_argument('--batch_size', type=int, default=8) # 8, 4
-data_arg.add_argument('--num_worker', type=int, default=1)
+data_arg.add_argument('--num_worker', type=int, default=2)
 data_arg.add_argument('--data_type', type=str, default='velocity', 
                       choices=['velocity']) #,'stream','density','pressure','levelset'])
 
@@ -55,7 +55,8 @@ train_arg.add_argument('--num_cycle', type=float, default=5)
 # Misc
 misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--log_dir', type=str, default='log')
-misc_arg.add_argument('--tag', type=str, default='test')
+misc_arg.add_argument('--title', type=str, default='title')
+misc_arg.add_argument('--tag', type=str, default='tag')
 misc_arg.add_argument('--data_dir', type=str, default='data')
 misc_arg.add_argument('--load_path', type=str, default='')
 misc_arg.add_argument('--log_step', type=int, default=500)

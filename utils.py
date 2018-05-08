@@ -36,9 +36,9 @@ def prepare_dirs_and_logger(config):
         config.model_dir = config.load_path
 
     elif not hasattr(config, 'model_dir'):    
-        model_name = "{}/{}/{}_{}/{}".format(
+        model_name = "{}/{}/{}/{}/{}_{}".format(
             config.archi, config.data_type, 
-            get_time(), config.tag, config.dataset)
+            config.dataset, config.title, config.tag, get_time())
 
         config.model_dir = os.path.join(config.log_dir, model_name)
     
