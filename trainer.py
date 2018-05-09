@@ -44,6 +44,7 @@ class Trainer(object):
             self.act = tf.nn.softsign
         self.w1 = config.w1
         self.w2 = config.w2
+        # self.l1 = config.l1
 
         self.use_c = config.use_curl
         if self.use_c:
@@ -208,6 +209,20 @@ class Trainer(object):
         self.g_loss_l1 = tf.reduce_mean(tf.abs(self.G_ - self.x))
         self.g_loss_j_l1 = tf.reduce_mean(tf.abs(self.G_jaco_ - self.x_jaco))
 
+        # G_n2 = tf.nn.l2_normalize(self.G_, axis=-1)
+        # x_n2 = tf.nn.l2_normalize(self.x, axis=-1)
+        # w = tf.reduce_sum(tf.multiply(self.x, self.x), axis=-1, keepdims=True)
+        # # self.g_loss_cos = tf.reduce_sum(tf.multiply(G_n2, x_n2), axis=-1)
+        # # self.g_loss_cos = tf.reduce_mean(1-self.g_loss_cos) # [0, 2]
+        # self.g_loss_cos = tf.losses.cosine_distance(G_n2, x_n2, weights=w, axis=-1)
+
+        # Gj_n2 = tf.nn.l2_normalize(self.G_jaco_, axis=-1)
+        # xj_n2 = tf.nn.l2_normalize(self.x_jaco, axis=-1)
+        # wj = tf.reduce_sum(tf.multiply(self.x_jaco, self.x_jaco), axis=-1, keepdims=True)
+        # # self.g_loss_j_cos = tf.reduce_sum(tf.multiply(Gj_n2, xj_n2), axis=-1)
+        # # self.g_loss_j_cos = tf.reduce_mean(1-self.g_loss_j_cos) # [0, 2]
+        # self.g_loss_j_cos = tf.losses.cosine_distance(Gj_n2, xj_n2, weights=wj, axis=-1)
+
         self.g_loss_ke = tf.abs(tf.reduce_mean(tf.square(self.G_)) - tf.reduce_mean(tf.square(self.x)))
         self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
         self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
@@ -215,6 +230,9 @@ class Trainer(object):
         self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
 
         self.g_loss = self.g_loss_l1*self.w1 + self.g_loss_j_l1*self.w2
+        # if self.l1:
+        # else:
+        #     self.g_loss = self.g_loss_cos*self.w1 + self.g_loss_j_cos*self.w2
 
         if self.lr_update == 'freeze':
             self.opts = []
@@ -242,6 +260,8 @@ class Trainer(object):
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/g_loss_l1", self.g_loss_l1),
             tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
+            # tf.summary.scalar("loss/g_loss_cos", self.g_loss_cos),
+            # tf.summary.scalar("loss/g_loss_j_cos", self.g_loss_j_cos),
 
             tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),           
             tf.summary.scalar("loss/g_loss_div", self.g_loss_div),

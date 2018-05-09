@@ -23,9 +23,10 @@ net_arg.add_argument('--filters', type=int, default=128,
                      choices=[64, 128], help='n in the paper')
 net_arg.add_argument('--num_conv', type=int, default=4)
 net_arg.add_argument('--last_k', type=int, default=3)
-net_arg.add_argument('--skip_concat', type=str2bool, default=True) # or add
+net_arg.add_argument('--skip_concat', type=str2bool, default=False) # or add
 net_arg.add_argument('--act', type=str, default='lrelu', choices=['lrelu', 'elu', 'softsign'])
 net_arg.add_argument('--use_curl', type=str2bool, default=True)
+# net_arg.add_argument('--l1', type=str2bool, default=True) # or cosine
 net_arg.add_argument('--w1', type=float, default=1.0)
 net_arg.add_argument('--w2', type=float, default=1.0)
 net_arg.add_argument('--archi', type=str, default='de', choices=['de']) # dg, ae, nn

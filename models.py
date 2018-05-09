@@ -3,7 +3,7 @@ import tensorflow as tf
 from ops import *
 
 def GeneratorBE(z, filters, output_shape, name='G',
-                num_conv=5, conv_k=3, last_k=3, repeat=0, skip_concat=True, act=lrelu, reuse=False):
+                num_conv=4, conv_k=3, last_k=3, repeat=0, skip_concat=False, act=lrelu, reuse=False):
     with tf.variable_scope(name, reuse=reuse) as vs:
         # repeat_num = int(np.log2(output_shape[0])) - 2
         # assert(repeat_num > 0)
@@ -41,6 +41,9 @@ def GeneratorBE(z, filters, output_shape, name='G',
                     x += x0
                     x = upscale(x, 2)
                     x0 = x
+
+            elif not skip_concat:
+                x += x0
         
         out = conv2d(x, output_shape[-1], k=last_k, s=1, name=str(layer_num)+'_conv')
         # out = tf.clip_by_value(out, -1, 1)
@@ -49,7 +52,7 @@ def GeneratorBE(z, filters, output_shape, name='G',
     return out, variables
 
 def GeneratorBE3(z, filters, output_shape, name='G',
-                num_conv=5, conv_k=3, last_k=3, repeat=0, skip_concat=True, act=lrelu, reuse=False):
+                num_conv=4, conv_k=3, last_k=3, repeat=0, skip_concat=False, act=lrelu, reuse=False):
     with tf.variable_scope(name, reuse=reuse) as vs:
         if repeat == 0:
             repeat_num = int(np.log2(np.max(output_shape[:-1]))) - 2
@@ -80,7 +83,10 @@ def GeneratorBE3(z, filters, output_shape, name='G',
                     x += x0
                     x = upscale3(x, 2)
                     x0 = x
-                    
+
+            elif not skip_concat:
+                x += x0
+
         out = conv3d(x, output_shape[-1], k=last_k, s=1, name=str(layer_num)+'_conv')
 
     variables = tf.contrib.framework.get_variables(vs)
