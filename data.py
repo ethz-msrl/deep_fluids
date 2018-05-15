@@ -496,35 +496,34 @@ def test3d(config):
 if __name__ == "__main__":
     from config import get_config
     from utils import prepare_dirs_and_logger, save_config, save_image
+    config, unparsed = get_config()
 
-    ##############
+    #############
     # test: 2d
-    # config, unparsed = get_config()
-    # setattr(config, 'is_3d', False)
-    # setattr(config, 'dataset', 'smoke_pos21_size5_f200')
-    # setattr(config, 'res_x', 96)
-    # setattr(config, 'res_y', 128)
+    setattr(config, 'is_3d', False)
+    setattr(config, 'dataset', 'smoke_pos21_size5_f200')
+    setattr(config, 'res_x', 96)
+    setattr(config, 'res_y', 128)
     # setattr(config, 'dataset', 'liquid_pos10_size4_f200')
     # setattr(config, 'res_x', 128)
     # setattr(config, 'res_y', 64)
     # setattr(config, 'dataset', 'ecmwf_era_interim')
     # setattr(config, 'res_x', 480)
     # setattr(config, 'res_y', 240)
-    # for data_type in ['velocity']:
-    #     setattr(config, 'data_type', data_type)
-    #     test2d(config)
-    ##############
-
-    ##############
-    # test: 3d
-    config, unparsed = get_config()
-    setattr(config, 'is_3d', True)
-    setattr(config, 'dataset', 'smoke3_vel5_buo3_f250')
-    setattr(config, 'res_x', 112)
-    setattr(config, 'res_y', 64)
-    setattr(config, 'res_z', 32)
-    setattr(config, 'batch_size', 4)
     for data_type in ['velocity']:
         setattr(config, 'data_type', data_type)
-        test3d(config)
-    ##############
+        test2d(config)
+    #############
+
+    # ##############
+    # # test: 3d
+    # setattr(config, 'is_3d', True)
+    # setattr(config, 'dataset', 'smoke3_vel5_buo3_f250')
+    # setattr(config, 'res_x', 112)
+    # setattr(config, 'res_y', 64)
+    # setattr(config, 'res_z', 32)
+    # setattr(config, 'batch_size', 4)
+    # for data_type in ['velocity']:
+    #     setattr(config, 'data_type', data_type)
+    #     test3d(config)
+    # ##############
