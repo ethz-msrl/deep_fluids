@@ -6,6 +6,7 @@ from glob import glob
 from tqdm import trange
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import zoom
 
 parser = argparse.ArgumentParser()
 
@@ -28,8 +29,9 @@ parser.add_argument("--min_time", type=float, default=0)
 parser.add_argument("--max_time", type=float, default=24)
 parser.add_argument("--num_simulations", type=int, default=16425)
 
-parser.add_argument("--resolution_x", type=int, default=480)
-parser.add_argument("--resolution_y", type=int, default=240)
+parser.add_argument("--resolution_x", type=int, default=256) # 480
+parser.add_argument("--resolution_y", type=int, default=128) # 240
+parser.add_argument("--rescale", type=int, default=1)
 
 args = parser.parse_args()
 
@@ -80,70 +82,88 @@ def main():
 				continue
 			
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 0))
+			v = an[an_idx,:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=an[an_idx,:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[0]])
-
+		
 
 			d = np.load(fc_paths[fc_idx+1])[::-1,:,:]
 			v_range = [np.minimum(v_range[0], d.min()),
 					   np.maximum(v_range[1], d.max())]
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 1))
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=d[:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[1]])
 
 			d = np.load(fc_paths[fc_idx+2])[::-1,:,:]
 			v_range = [np.minimum(v_range[0], d.min()),
 					   np.maximum(v_range[1], d.max())]
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 2))
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=d[:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[2]])
 
 			d = np.load(fc_paths[fc_idx+3])[::-1,:,:]
 			v_range = [np.minimum(v_range[0], d.min()),
 					   np.maximum(v_range[1], d.max())]
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 3))
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=d[:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[3]])
 
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 4))
+			v = an[an_idx+1,:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=an[an_idx+1,:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[4]])
 
 			d = np.load(fc_paths[fc_idx+5])[::-1,:,:]
 			v_range = [np.minimum(v_range[0], d.min()),
 					   np.maximum(v_range[1], d.max())]
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 5))
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=d[:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[5]])
 
 			d = np.load(fc_paths[fc_idx+6])[::-1,:,:]
 			v_range = [np.minimum(v_range[0], d.min()),
 					   np.maximum(v_range[1], d.max())]
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 6))
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=d[:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[6]])
 
 			d = np.load(fc_paths[fc_idx+7])[::-1,:,:]
 			v_range = [np.minimum(v_range[0], d.min()),
 					   np.maximum(v_range[1], d.max())]
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 7))
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=d[:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[7]])
 
 			d = np.load(fc_paths[fc_idx+4])[::-1,:,:]
 			v_range = [np.minimum(v_range[0], d.min()),
 					   np.maximum(v_range[1], d.max())]
 			v_file_path = os.path.join(args.log_dir, 'v', args.path_format % (i, j, 8))
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))
 			np.savez_compressed(v_file_path, 
-								x=d[:-1,:,:],
+								x=v,
 								y=[p1, p2, p3_[8]])
 
 			an_idx += 2

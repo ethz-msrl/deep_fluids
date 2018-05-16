@@ -24,7 +24,7 @@ class Trainer(object):
         else:
             self.x_jaco, self.x_vort = jacobian(self.x)
 
-        self.archi = config.archi
+        self.arch = config.arch
         self.res_x = config.res_x
         self.res_y = config.res_y
         self.res_z = config.res_z

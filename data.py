@@ -373,6 +373,7 @@ def test2d(config):
     batch_manager = BatchManager(config)
 
     # test: visualization
+    x, _ = preprocess('data/ecmwf_era_interim/v/0_0.npz', 'velocity', batch_manager.x_range, batch_manager.y_range)
     # x, _ = preprocess('data/smoke_pos10_f100/v/4_50.npz', 'velocity', batch_manager.x_range, batch_manager.y_range)
     # x, _ = batch_manager.denorm(x=x)
     # x = x[::-1,:]
@@ -501,15 +502,15 @@ if __name__ == "__main__":
     #############
     # test: 2d
     setattr(config, 'is_3d', False)
-    setattr(config, 'dataset', 'smoke_pos21_size5_f200')
-    setattr(config, 'res_x', 96)
-    setattr(config, 'res_y', 128)
+    # setattr(config, 'dataset', 'smoke_pos21_size5_f200')
+    # setattr(config, 'res_x', 96)
+    # setattr(config, 'res_y', 128)
     # setattr(config, 'dataset', 'liquid_pos10_size4_f200')
     # setattr(config, 'res_x', 128)
     # setattr(config, 'res_y', 64)
-    # setattr(config, 'dataset', 'ecmwf_era_interim')
-    # setattr(config, 'res_x', 480)
-    # setattr(config, 'res_y', 240)
+    setattr(config, 'dataset', 'ecmwf_era_interim')
+    setattr(config, 'res_x', 256)
+    setattr(config, 'res_y', 128)
     for data_type in ['velocity']:
         setattr(config, 'data_type', data_type)
         test2d(config)

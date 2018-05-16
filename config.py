@@ -29,7 +29,7 @@ net_arg.add_argument('--use_curl', type=str2bool, default=True)
 # net_arg.add_argument('--l1', type=str2bool, default=True) # or cosine
 net_arg.add_argument('--w1', type=float, default=1.0)
 net_arg.add_argument('--w2', type=float, default=1.0)
-net_arg.add_argument('--archi', type=str, default='de', choices=['de']) # dg, ae, nn
+net_arg.add_argument('--arch', type=str, default='de', choices=['de']) # dg, ae, nn
 
 # Data
 data_arg = add_argument_group('Data')

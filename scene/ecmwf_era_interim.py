@@ -6,6 +6,7 @@ from glob import glob
 from tqdm import trange
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import zoom
 
 parser = argparse.ArgumentParser()
 
@@ -28,8 +29,9 @@ parser.add_argument("--min_time", type=float, default=0)
 parser.add_argument("--max_time", type=float, default=24)
 parser.add_argument("--num_simulations", type=int, default=1825)
 
-parser.add_argument("--resolution_x", type=int, default=480)
-parser.add_argument("--resolution_y", type=int, default=240)
+parser.add_argument("--resolution_x", type=int, default=256) # 480
+parser.add_argument("--resolution_y", type=int, default=128) # 240
+parser.add_argument("--rescale", type=int, default=1)
 
 args = parser.parse_args()
 
@@ -80,21 +82,33 @@ def main():
 			
 			d_ = []
 			# 0
-			d_.append(an[an_idx,:-1,:,:])
+			v = an[an_idx,:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))			
+			d_.append(v)
 			# 6
 			d = np.load(fc_paths[fc_idx+2])
-			d_.append(d[:-1,:,:])
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))			
+			d_.append(v)
 			# 12
-			d_.append(an[an_idx+1,:-1,:,:])
+			v = an[an_idx+1,:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))			
+			d_.append(v)
 			# 18
 			d = np.load(fc_paths[fc_idx+6])
-			d_.append(d[:-1,:,:])
+			v = d[:-1,:,:]
+			if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))			
+			d_.append(v)
 			# 24
 			if j < args.num_day-1:
-				d_.append(an[an_idx+2,:-1,:,:])
+				v = an[an_idx+2,:-1,:,:]
+				if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))			
+				d_.append(v)
 			else:
 				d = np.load(fc_paths[fc_idx+4])
-				d_.append(d[:-1,:,:])
+				v = d[:-1,:,:]
+				if args.rescale == 1: v = zoom(v, (args.resolution_y/240.0, args.resolution_x/480.0, 1))			
+				d_.append(v)
 
 			for k, d in enumerate(d_):
 				p3 = p3_[k]
