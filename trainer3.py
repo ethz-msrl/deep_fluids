@@ -278,6 +278,45 @@ class Trainer3(Trainer):
         _, self.Gt_vort_ = jacobian3(self.Gt_)
         self.Gt_vort = denorm_img3(self.Gt_vort_)
 
+    def test(self):
+        self.build_test_model(self.test_batch_size)
+        
+        self.b_num = self.test_batch_size
+        self.z = self.zt
+        self.G_ = self.Gt_
+        self.G = self.Gt
+
+        self.test_smokegun()
+        return
+
+    def test_smokegun(self):
+        p_list = [
+            [0,0], [0,1], [0,2],
+            [1,0], [1,1], [1,2],
+            [2,0], [2,1], [2,2],
+            [3,0], [3,1], [3,2],
+            [4,0], [4,1], [4,2],
+            [0,0.5], [0,1.5], [3.5,2],
+        ]
+
+        for p12 in p_list:
+            print(p12)            
+            p1_, p2_ = p12[0], p12[1]
+            out_dir = os.path.join(self.model_dir, 'p2_n%d' % self.test_intv)
+            title = str(p1_) + '_' + str(p2_)
+            dump_path = os.path.join(out_dir, title+'.npz')
+            
+            G = self.gen_p2(p1_, p2_)
+            G = G[:,:,::-1,:,:]
+            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
+            np.savez_compressed(dump_path, v=G)
+
+            from subprocess import call
+            call(["../manta/build_nogui_vdb/Release/manta.exe",
+                    "./scene/smoke3_vel_buo.py",
+                    "--is_test=True",
+                    "--vpath={}".format(dump_path)])
+
     def generate(self, inputs, root_path=None, idx=None):
         # xy_list = []
         # zy_list = []

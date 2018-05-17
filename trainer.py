@@ -393,6 +393,13 @@ class Trainer(object):
             for p2_ in p2:
                 self.gen_p2(p1_, p2_)        
 
+    def test_liquid2(self):        
+        p1 = [0, 4, 9]
+        p2 = [0, 1, 3]
+        for p1_ in p1:
+            for p2_ in p2:
+                self.gen_p2(p1_, p2_)
+
     def gen_p2(self, p1, p2):
         y1 = int(self.batch_manager.y_num[0])
         y2 = int(self.batch_manager.y_num[1])
@@ -446,19 +453,13 @@ class Trainer(object):
             else:
                 G = np.concatenate((G, G_), axis=0)
 
-        for i in range(intv):
-            x = G[i]
-            img_path = os.path.join(img_dir, '%04d.png' % i)
-            vortplot(x, img_path)
+        if not self.is_3d:
+            for i in range(intv):
+                x = G[i]
+                img_path = os.path.join(img_dir, '%04d.png' % i)
+                vortplot(x, img_path)
 
         return G
-
-    def test_liquid2(self):        
-        p1 = [0, 4, 9]
-        p2 = [0, 1, 3]
-        for p1_ in p1:
-            for p2_ in p2:
-                self.gen_p2(p1_, p2_)
 
     def test(self):
         self.build_test_model(self.test_batch_size)

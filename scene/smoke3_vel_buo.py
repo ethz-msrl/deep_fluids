@@ -11,6 +11,9 @@ try:
 except ImportError:
 	pass
 
+def str2bool(v):
+    return v.lower() in ('true', '1')
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--log_dir", type=str, default='data/smoke3_vel5_buo3_f250')
@@ -45,8 +48,91 @@ parser.add_argument("--open_bound", type=str, default='XyY')
 parser.add_argument("--time_step", type=float, default=0.5)
 parser.add_argument("--clamp_mode", type=int, default=2)
 
+parser.add_argument('--is_test', type=str2bool, default=False)
+parser.add_argument('--vpath', type=str, default='')
+
 args = parser.parse_args()
 
+
+def get_param(p1, p2):
+    min_p1 = args.min_inflow
+    max_p1 = args.max_inflow
+    num_p1 = args.num_inflow
+    min_p2 = args.min_buoyancy
+    max_p2 = args.max_buoyancy
+    num_p2 = args.num_buoyancy
+    p1_ = p1/(num_p1-1) * (max_p1-min_p1) + min_p1
+    p2_ = p2/(num_p2-1) * (max_p2-min_p2) + min_p2
+    return p1_, p2_
+
+def test():
+	filename = os.path.basename(args.vpath)[:-4]
+	print(filename)
+
+	p1, p2 = filename.split('_')
+	p1, p2 = get_param(float(p1), float(p2))
+	title = 'd_' + filename
+	vdb_dir = os.path.join(os.path.dirname(args.vpath), filename)
+
+	# solver params
+	res_x = args.resolution_x
+	res_y = args.resolution_y
+	res_z = args.resolution_z
+	gs = vec3(res_x, res_y, res_z)
+	
+	s = Solver(name='main', gridSize=gs, dim=3)
+	s.frameLength = 1.0
+	s.timestep = args.time_step
+	
+	flags = s.create(FlagGrid)
+	vel = s.create(MACGrid)
+	density = s.create(RealGrid)
+	pressure = s.create(RealGrid)
+
+	# stream function
+	# omega = s.create(VecGrid)
+	# stream = s.create(VecGrid)
+	# vel_out = s.create(MACGrid)
+
+	# noise field, tweak a bit for smoke source
+	noise = s.create(NoiseField, loadFromFile=True)
+	noise.posScale = vec3(45)
+	noise.clamp = True
+	noise.clampNeg = 0
+	noise.clampPos = 1
+	noise.valOffset = 0.75
+	noise.timeAnim = 0.2
+
+	density.clear()
+	vel.clear()
+	pressure.clear()
+
+	flags.initDomain(boundaryWidth=args.bWidth)
+	flags.fillGrid()
+	setOpenBound(flags, args.bWidth, args.open_bound, FlagOutflow|FlagEmpty)
+		
+	src_center = gs*vec3(args.src_x_pos,args.src_y_pos,args.src_z_pos)
+	src_radius = args.resolution_y*args.src_radius
+	src_z = gs*vec3(0,args.src_height,0)
+	source = s.create(Cylinder, center=src_center, radius=src_radius, z=src_z)
+
+	inflow = vec3(p1,0,0)
+	buoyancy = vec3(0,p2,0)
+
+	with np.load(args.vpath) as data:
+		x = data['v']
+
+	for i in range(args.num_frames):
+		v = x[i,...]
+		copyArrayToGridMAC(target=vel, source=v)
+
+		densityInflow(flags=flags, density=density, noise=noise, shape=source, scale=1, sigma=0.5)
+		advectSemiLagrange(flags=flags, vel=vel, grid=density, order=2, 
+						   openBounds=True, boundaryWidth=args.bWidth, clampMode=args.clamp_mode)
+
+		vdb_file_path = os.path.join(vdb_dir, title+'_%d.vdb' % i)
+		density.save(vdb_file_path)
+		s.step()
 
 def main():
 	if not os.path.exists(args.log_dir):
@@ -232,4 +318,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+	if args.is_test:
+		test()
+	else:
+		main()
