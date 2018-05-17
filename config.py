@@ -65,7 +65,7 @@ misc_arg.add_argument('--load_path', type=str, default='')
 misc_arg.add_argument('--log_step', type=int, default=500)
 misc_arg.add_argument('--test_step', type=int, default=1000)
 misc_arg.add_argument('--save_sec', type=int, default=3600)
-misc_arg.add_argument('--test_batch_size', type=int, default=5) # 100, 5
+misc_arg.add_argument('--test_batch_size', type=int, default=100) # 100, 5
 misc_arg.add_argument('--test_intv', type=int, default=200)
 misc_arg.add_argument('--random_seed', type=int, default=123)
 misc_arg.add_argument('--gpu_id', type=str, default='0')

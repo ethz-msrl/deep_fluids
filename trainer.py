@@ -371,15 +371,101 @@ class Trainer(object):
     def build_test_model(self, b_num):
         self.b_num = b_num
         self.z = tf.placeholder(dtype=tf.float32, shape=[self.b_num, self.c_num])
-        self.G_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                 num_conv=self.num_conv, last_k=self.last_k,
-                                 repeat=self.repeat, skip_concat=self.skip_concat,
-                                 act=self.act, reuse=True)
+        if self.use_c:
+            self.G_s, _ = GeneratorBE(self.z, self.filters, self.output_shape,
+                                      num_conv=self.num_conv, last_k=self.last_k,
+                                      repeat=self.repeat, skip_concat=self.skip_concat,
+                                      act=self.act, reuse=True)
+            self.G_ = curl(self.G_s)
+        else:
+            self.G_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
+                                     num_conv=self.num_conv, last_k=self.last_k,
+                                     repeat=self.repeat, skip_concat=self.skip_concat,
+                                     act=self.act, reuse=True)
+        
         self.G = denorm_img(self.G_) # for debug
-        self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
+        # self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
+
+    def test_smoke2(self):        
+        p1 = [9, 9.5, 10]
+        p2 = [1]
+        for p1_ in p1:
+            for p2_ in p2:
+                self.gen_p2(p1_, p2_)        
+
+    def gen_p2(self, p1, p2):
+        y1 = int(self.batch_manager.y_num[0])
+        y2 = int(self.batch_manager.y_num[1])
+
+        c1 = p1/float(y1-1)*2-1
+        c2 = p2/float(y2-1)*2-1
+
+        intv = self.test_intv
+        z_range = [-1, 1]
+        z_varying = np.linspace(z_range[0], z_range[1], num=intv)
+        z_shape = (intv, self.c_num)
+
+        z_c = np.zeros(shape=z_shape)
+        z_c[:,0] = c1
+        z_c[:,1] = c2
+        z_c[:,-1] = z_varying
+        title = str(p1) + '_' + str(p2)
+
+        out_dir = os.path.join(self.model_dir, 'p2_n%d' % intv)
+        img_dir = os.path.join(out_dir, title)
+        print(img_dir)
+        if not os.path.exists(img_dir):
+            os.makedirs(img_dir)
+
+        assert(intv % self.b_num == 0)
+        niter = int(intv / self.b_num)
+
+        ##################
+        # timing
+        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}) # dry run
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
+        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}, options=run_options, run_metadata=run_metadata)
+        from tensorflow.python.client import timeline
+        tl = timeline.Timeline(run_metadata.step_stats)
+        ctf = tl.generate_chrome_trace_format()
+        with open(os.path.join(img_dir, 'timeline.json'), 'w') as f:
+            f.write(ctf)
+        ##################
+        
+        ##################
+        # eval
+        G = None
+        G_div = None
+        for b in range(niter):            
+            G_ = self.sess.run(self.G_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
+            G_, _ = self.batch_manager.denorm(x=G_)
+
+            if G is None:
+                G = G_
+            else:
+                G = np.concatenate((G, G_), axis=0)
+
+        for i in range(intv):
+            x = G[i]
+            img_path = os.path.join(img_dir, '%04d.png' % i)
+            vortplot(x, img_path)
+
+        return G
+
+    def test_liquid2(self):        
+        p1 = [0, 4, 9]
+        p2 = [0, 1, 3]
+        for p1_ in p1:
+            for p2_ in p2:
+                self.gen_p2(p1_, p2_)
 
     def test(self):
         self.build_test_model(self.test_batch_size)
+
+        # self.test_smoke2()
+        self.test_liquid2()
+        return
 
         intv = self.test_intv
         z_range = [-1, 1]
