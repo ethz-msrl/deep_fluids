@@ -87,7 +87,6 @@ def test():
 	flags = s.create(FlagGrid)
 	vel = s.create(MACGrid)
 	density = s.create(RealGrid)
-	pressure = s.create(RealGrid)
 
 	# stream function
 	# omega = s.create(VecGrid)
@@ -105,7 +104,6 @@ def test():
 
 	density.clear()
 	vel.clear()
-	pressure.clear()
 
 	flags.initDomain(boundaryWidth=args.bWidth)
 	flags.fillGrid()
@@ -115,9 +113,6 @@ def test():
 	src_radius = args.resolution_y*args.src_radius
 	src_z = gs*vec3(0,args.src_height,0)
 	source = s.create(Cylinder, center=src_center, radius=src_radius, z=src_z)
-
-	inflow = vec3(p1,0,0)
-	buoyancy = vec3(0,p2,0)
 
 	with np.load(args.vpath) as data:
 		x = data['v']
@@ -190,7 +185,7 @@ def main():
 	noise.valOffset = 0.75
 	noise.timeAnim = 0.2
 
-	d_ = np.zeros([res_z,res_y,res_x], dtype=np.float32)
+	# d_ = np.zeros([res_z,res_y,res_x], dtype=np.float32)
 	v_ = np.zeros([res_y,res_x,res_z,3], dtype=np.float32)
 	# s_ = np.zeros([res_y,res_x,res_z,3], dtype=np.float32)
 	# p_ = np.zeros([res_z,res_y,res_x], dtype=np.float32)

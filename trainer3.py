@@ -286,7 +286,8 @@ class Trainer3(Trainer):
         self.G_ = self.Gt_
         self.G = self.Gt
 
-        self.test_smokegun()
+        # self.test_smokegun()
+        self.test_smokeobs()
         return
 
     def test_smokegun(self):
@@ -314,6 +315,31 @@ class Trainer3(Trainer):
             from subprocess import call
             call(["../manta/build_nogui_vdb/Release/manta.exe",
                     "./scene/smoke3_vel_buo.py",
+                    "--is_test=True",
+                    "--vpath={}".format(dump_path)])
+
+    def test_smokeobs(self):
+        p_list = [
+            [4.5,2],
+            [0,2], [2,2], [5,2], [8,2], [10,2],
+            [4,2], 
+        ]
+
+        for p12 in p_list:
+            print(p12)            
+            p1_, p2_ = p12[0], p12[1]
+            out_dir = os.path.join(self.model_dir, 'p2_n%d' % self.test_intv)
+            title = str(p1_) + '_' + str(p2_)
+            dump_path = os.path.join(out_dir, title+'.npz')
+            
+            G = self.gen_p2(p1_, p2_)
+            G = G[:,:,::-1,:,:]
+            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
+            np.savez_compressed(dump_path, v=G)
+
+            from subprocess import call
+            call(["../manta/build_nogui_vdb/Release/manta.exe",
+                    "./scene/smoke3_obs_buo.py",
                     "--is_test=True",
                     "--vpath={}".format(dump_path)])
 
