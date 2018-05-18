@@ -287,7 +287,8 @@ class Trainer3(Trainer):
         self.G = self.Gt
 
         # self.test_smokegun()
-        self.test_smokeobs()
+        # self.test_smokeobs()
+        self.test_upres()
         return
 
     def test_smokegun(self):
@@ -297,7 +298,8 @@ class Trainer3(Trainer):
             [2,0], [2,1], [2,2],
             [3,0], [3,1], [3,2],
             [4,0], [4,1], [4,2],
-            [0,0.5], [0,1.5], [3.5,2],
+            [0,1.5], # buo 0, 1-1.5-2
+            [3.5,2], # vel 3-3.5-4, 2
         ]
 
         for p12 in p_list:
@@ -319,10 +321,10 @@ class Trainer3(Trainer):
                     "--vpath={}".format(dump_path)])
 
     def test_smokeobs(self):
+        p2 = 2
         p_list = [
-            [4.5,2],
-            [0,2], [2,2], [5,2], [8,2], [10,2],
-            [4,2], 
+            [0,p2], [2,p2], [5,p2], [8,p2], [10,p2],
+            [4,p2], [4.5,p2], # 4-4.5-5
         ]
 
         for p12 in p_list:
@@ -342,6 +344,84 @@ class Trainer3(Trainer):
                     "./scene/smoke3_obs_buo.py",
                     "--is_test=True",
                     "--vpath={}".format(dump_path)])
+
+    def test_upres(self):
+        p_list = np.linspace(0, 4, num=9) # intv: 0.5
+        for p in p_list:
+            if p == int(p): p = int(p) # 0.0 -> 0
+            print(p)
+            out_dir = os.path.join(self.model_dir, 'p1_n%d' % self.test_intv)
+            title = str(p)
+            dump_path = os.path.join(out_dir, title+'.npz')
+            
+            G = self.gen_p1(p)
+            G = G[:,:,::-1,:,:]
+            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
+            np.savez_compressed(dump_path, v=G)
+
+            from subprocess import call
+            call(["../manta/build_nogui_vdb/Release/manta.exe",
+                    "./scene/smoke3_upres.py",
+                    "--is_test=True",
+                    "--vpath={}".format(dump_path)])
+
+    def gen_p1(self, p1):
+        y1 = int(self.batch_manager.y_num[0])
+        
+        c1 = p1/float(y1-1)*2-1
+
+        intv = self.test_intv
+        z_range = [-1, 1]
+        z_varying = np.linspace(z_range[0], z_range[1], num=intv)
+        z_shape = (intv, self.c_num)
+
+        z_c = np.zeros(shape=z_shape)
+        z_c[:,0] = c1
+        z_c[:,-1] = z_varying
+        title = str(p1)
+
+        out_dir = os.path.join(self.model_dir, 'p1_n%d' % intv)
+        img_dir = os.path.join(out_dir, title)
+        print(img_dir)
+        if not os.path.exists(img_dir):
+            os.makedirs(img_dir)
+
+        assert(intv % self.b_num == 0)
+        niter = int(intv / self.b_num)
+
+        ##################
+        # timing
+        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}) # dry run
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
+        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}, options=run_options, run_metadata=run_metadata)
+        from tensorflow.python.client import timeline
+        tl = timeline.Timeline(run_metadata.step_stats)
+        ctf = tl.generate_chrome_trace_format()
+        with open(os.path.join(img_dir, 'timeline.json'), 'w') as f:
+            f.write(ctf)
+        ##################
+        
+        ##################
+        # eval
+        G = None
+        G_div = None
+        for b in range(niter):            
+            G_ = self.sess.run(self.G_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
+            G_, _ = self.batch_manager.denorm(x=G_)
+
+            if G is None:
+                G = G_
+            else:
+                G = np.concatenate((G, G_), axis=0)
+
+        if not self.is_3d:
+            for i in range(intv):
+                x = G[i]
+                img_path = os.path.join(img_dir, '%04d.png' % i)
+                vortplot(x, img_path)
+
+        return G
 
     def generate(self, inputs, root_path=None, idx=None):
         # xy_list = []

@@ -1,5 +1,8 @@
-REM smokeobs
-python main.py --is_3d=True --test_batch_size=5 --test_intv=150 --dataset=smoke3_obs11_buo4_f150 --res_x=64 --res_y=96 --res_z=64 --load_path=log/de/velocity/smoke3_obs11_buo4_f150/final/test --is_train=False
+REM upres
+python main.py --is_3d=True --test_batch_size=2 --filters=64 --test_intv=150 --dataset=smoke3_res5_96_f150 --res_x=96 --res_y=144 --res_z=96 --load_path=log/de/velocity/smoke3_res5_96_f150/final/test --is_train=False
+
+REM REM smokeobs
+REM python main.py --is_3d=True --test_batch_size=5 --test_intv=150 --dataset=smoke3_obs11_buo4_f150 --res_x=64 --res_y=96 --res_z=64 --load_path=log/de/velocity/smoke3_obs11_buo4_f150/final/test --is_train=False
 
 REM REM smokegun
 REM python main.py --is_3d=True --test_batch_size=5 --test_intv=250 --dataset=smoke3_vel5_buo3_f250 --res_x=112 --res_y=64 --res_z=32 --load_path=log/de/velocity/smoke3_vel5_buo3_f250/final/test --is_train=False
