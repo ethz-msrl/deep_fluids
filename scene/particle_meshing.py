@@ -34,9 +34,9 @@ def meshing(m):
 	m.phi.setBound(1, boundaryWidth=1)
 	m.phi.createMesh(m.mesh)
 
-	# for _ in range(5):
-	# 	smoothMesh(mesh=m.mesh, strength=1e-3, steps=10) 
-	# 	subdivideMesh(mesh=m.mesh, minAngle=0.01, minLength=0.5, maxLength=3*0.5, cutTubes=False)
+	for _ in range(5):
+		smoothMesh(mesh=m.mesh, strength=1e-3, steps=10) 
+		subdivideMesh(mesh=m.mesh, minAngle=0.01, minLength=0.5, maxLength=3*0.5, cutTubes=False)
 	
 	dirname = os.path.join(os.path.dirname(m.pt_path), '..')
 	basename = os.path.basename(m.pt_path)[:-3]
