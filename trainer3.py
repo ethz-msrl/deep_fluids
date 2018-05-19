@@ -286,24 +286,27 @@ class Trainer3(Trainer):
         self.G_ = self.Gt_
         self.G = self.Gt
 
-        # self.test_smokegun()
-        # self.test_smokeobs()
-        self.test_upres()
-        return
+        if 'smoke3_vel5_buo3_f250' in self.load_path: self.test_smokegun()
+        elif 'smoke3_obs11_buo4_f150' in self.load_path: self.test_smokeobs()
+        elif 'smoke3_res5_96_f150' in self.load_path: self.test_upres()
+        elif 'liquid3_d5_r10_f150' in self.load_path:
+            if self.test_slowmo: self.test_liquiddrop_slowmo()
+            else: self.test_liquiddrop()
+        elif 'liquid3_mid_uni_vis4_f150' in self.load_path:
+            if self.test_slowmo: self.test_liquidvis_slowmo()
+            else: self.test_liquidvis()
 
     def test_smokegun(self):
         p_list = [
             [0,0], [0,1], [0,2],
-            [1,0], [1,1], [1,2],
             [2,0], [2,1], [2,2],
-            [3,0], [3,1], [3,2],
             [4,0], [4,1], [4,2],
             [0,1.5], # buo 0, 1-1.5-2
             [3.5,2], # vel 3-3.5-4, 2
         ]
 
         for p12 in p_list:
-            print(p12)            
+            print(p12)
             p1_, p2_ = p12[0], p12[1]
             out_dir = os.path.join(self.model_dir, 'p2_n%d' % self.test_intv)
             title = str(p1_) + '_' + str(p2_)
@@ -365,63 +368,158 @@ class Trainer3(Trainer):
                     "--is_test=True",
                     "--vpath={}".format(dump_path)])
 
-    def gen_p1(self, p1):
-        y1 = int(self.batch_manager.y_num[0])
-        
-        c1 = p1/float(y1-1)*2-1
+    def test_liquiddrop(self):
+        p_list = [
+            [0,0], [4,0],
+            [0,5], [4,5],
+            [0.5,0.5], [1,1], # 0,0 - 0.5,0.5 - 1,1
+        ]
 
-        intv = self.test_intv
-        z_range = [-1, 1]
-        z_varying = np.linspace(z_range[0], z_range[1], num=intv)
-        z_shape = (intv, self.c_num)
+        for p12 in p_list:
+            print(p12)            
+            p1_, p2_ = p12[0], p12[1]
+            out_dir = os.path.join(self.model_dir, 'p2_n%d' % self.test_intv)
+            title = str(p1_) + '_' + str(p2_)
+            dump_path = os.path.join(out_dir, title+'.npz')
+            
+            G = self.gen_p2(p1_, p2_)
+            G = G[:,:,::-1,:,:]
+            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
+            np.savez_compressed(dump_path, v=G)
 
-        z_c = np.zeros(shape=z_shape)
-        z_c[:,0] = c1
-        z_c[:,-1] = z_varying
-        title = str(p1)
+            from subprocess import call
+            call(["../manta/build_nogui_omp/Release/manta.exe",
+                    "./scene/liquid3_d_r.py",
+                    "--is_test=True",
+                    "--is_slow=False",
+                    "--vpath={}".format(dump_path)])
+
+            call(["../manta/build_nogui_omp/Release/manta.exe",
+                    "./scene/particle_meshing.py",
+                    "--log_dir={}".format(os.path.join(out_dir, title)),
+                    "--resolution_x={}".format(self.res_x),
+                    "--resolution_y={}".format(self.res_y),
+                    "--resolution_z={}".format(self.res_z)])
+
+    def test_liquiddrop_slowmo(self):
+        pv1, pv2 = 24, 29
+        intv2 = (pv2-pv1+1)*10 # x10
+        intv = self.test_intv - (pv2-pv1+1) + intv2
+        yn = self.test_intv # orignal last frames
+        cv0 = (pv1-1)/(yn-1)*2 - 1
+        cv1 = pv1/(yn-1)*2 - 1
+        cv2 = pv2/(yn-1)*2 - 1
+        cv3 = (pv2+1)/(yn-1)*2 - 1
+        z_range1 = [-1, cv0]
+        z_range2 = [cv1, cv2]
+        z_range3 = [cv3, 1]
+        z_varying1 = np.linspace(z_range1[0], z_range1[1], num=pv1)
+        z_varying2 = np.linspace(z_range2[0], z_range2[1], num=intv2)
+        z_varying3 = np.linspace(z_range3[0], z_range3[1], num=yn-pv2-1)
+        z_varying = np.concatenate((z_varying1,z_varying2,z_varying3), axis=0)
+        z_in = np.zeros(shape=[intv, self.c_num])
+
+        p1_, p2_ = 0, 0
+        z_in[:,0] = -1
+        z_in[:,1] = -1
+        z_in[:,-1] = z_varying
+
+        out_dir = os.path.join(self.model_dir, 'p2_n%d' % intv)
+        title = str(p1_) + '_' + str(p1_)
+        dump_path = os.path.join(out_dir, title+'.npz')
+            
+        G = self.gen_p2(p1_, p2_, z_in)
+        G = G[:,:,::-1,:,:]
+        G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
+        np.savez_compressed(dump_path, v=G)
+
+        from subprocess import call
+        call(["../manta/build_nogui_omp/Release/manta.exe",
+                "./scene/liquid3_d_r.py",
+                "--is_test=True",
+                "--is_slow=True",
+                "--vpath={}".format(dump_path)])
+
+        call(["../manta/build_nogui_omp/Release/manta.exe",
+                "./scene/particle_meshing.py",
+                "--log_dir={}".format(os.path.join(out_dir, title)),
+                "--resolution_x={}".format(self.res_x),
+                "--resolution_y={}".format(self.res_y),
+                "--resolution_z={}".format(self.res_z)])
+
+    def test_liquidvis(self):
+        p_list = np.linspace(0, 3, num=7) # intv: 0.5
+        for p in p_list:
+            if p == int(p): p = int(p) # 0.0 -> 0
+            print(p)
+            out_dir = os.path.join(self.model_dir, 'p1_n%d' % self.test_intv)
+            title = str(p)
+            dump_path = os.path.join(out_dir, title+'.npz')
+            
+            G = self.gen_p1(p)
+            G = G[:,:,::-1,:,:]
+            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
+            np.savez_compressed(dump_path, v=G)
+
+            from subprocess import call
+            call(["../manta/build_nogui_omp/Release/manta.exe",
+                    "./scene/liquid3_vis.py",
+                    "--is_test=True",
+                    "--is_slow=False",
+                    "--vpath={}".format(dump_path)])
+
+            call(["../manta/build_nogui_omp/Release/manta.exe",
+                    "./scene/particle_meshing.py",
+                    "--log_dir={}".format(os.path.join(out_dir, title)),
+                    "--resolution_x={}".format(self.res_x),
+                    "--resolution_y={}".format(self.res_y),
+                    "--resolution_z={}".format(self.res_z)])
+
+    def test_liquidvis_slowmo(self):        
+        pv1, pv2 = 80, 85
+        intv2 = (pv2-pv1+1)*10 # x10
+        intv = self.test_intv - (pv2-pv1+1) + intv2
+        yn = self.test_intv # orignal last frames
+        cv0 = (pv1-1)/(yn-1)*2 - 1
+        cv1 = pv1/(yn-1)*2 - 1
+        cv2 = pv2/(yn-1)*2 - 1
+        cv3 = (pv2+1)/(yn-1)*2 - 1
+        z_range1 = [-1, cv0]
+        z_range2 = [cv1, cv2]
+        z_range3 = [cv3, 1]
+        z_varying1 = np.linspace(z_range1[0], z_range1[1], num=pv1)
+        z_varying2 = np.linspace(z_range2[0], z_range2[1], num=intv2)
+        z_varying3 = np.linspace(z_range3[0], z_range3[1], num=yn-pv2-1)
+        z_varying = np.concatenate((z_varying1,z_varying2,z_varying3), axis=0)
+
+        z_in = np.zeros(shape=[intv, self.c_num])
+
+        p = 0
+        z_in[:,0] = -1
+        z_in[:,-1] = z_varying
 
         out_dir = os.path.join(self.model_dir, 'p1_n%d' % intv)
-        img_dir = os.path.join(out_dir, title)
-        print(img_dir)
-        if not os.path.exists(img_dir):
-            os.makedirs(img_dir)
-
-        assert(intv % self.b_num == 0)
-        niter = int(intv / self.b_num)
-
-        ##################
-        # timing
-        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}) # dry run
-        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
-        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}, options=run_options, run_metadata=run_metadata)
-        from tensorflow.python.client import timeline
-        tl = timeline.Timeline(run_metadata.step_stats)
-        ctf = tl.generate_chrome_trace_format()
-        with open(os.path.join(img_dir, 'timeline.json'), 'w') as f:
-            f.write(ctf)
-        ##################
+        title = str(p)
+        dump_path = os.path.join(out_dir, title+'.npz')
         
-        ##################
-        # eval
-        G = None
-        G_div = None
-        for b in range(niter):            
-            G_ = self.sess.run(self.G_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
-            G_, _ = self.batch_manager.denorm(x=G_)
+        G = self.gen_p1(p, z_in)
+        G = G[:,:,::-1,:,:]
+        G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
+        np.savez_compressed(dump_path, v=G)
 
-            if G is None:
-                G = G_
-            else:
-                G = np.concatenate((G, G_), axis=0)
+        from subprocess import call
+        call(["../manta/build_nogui_omp/Release/manta.exe",
+                "./scene/liquid3_vis.py",
+                "--is_test=True",
+                "--is_slow=True",
+                "--vpath={}".format(dump_path)])
 
-        if not self.is_3d:
-            for i in range(intv):
-                x = G[i]
-                img_path = os.path.join(img_dir, '%04d.png' % i)
-                vortplot(x, img_path)
-
-        return G
+        call(["../manta/build_nogui_omp/Release/manta.exe",
+                "./scene/particle_meshing.py",
+                "--log_dir={}".format(os.path.join(out_dir, title)),
+                "--resolution_x={}".format(self.res_x),
+                "--resolution_y={}".format(self.res_y),
+                "--resolution_z={}".format(self.res_z)])
 
     def generate(self, inputs, root_path=None, idx=None):
         # xy_list = []

@@ -104,6 +104,7 @@ class Trainer(object):
         self.save_sec = config.save_sec
         self.test_intv = config.test_intv
         self.test_batch_size = config.test_batch_size
+        self.test_slowmo = config.test_slowmo
 
         self.is_train = config.is_train
         self.build_model()
@@ -400,25 +401,91 @@ class Trainer(object):
             for p2_ in p2:
                 self.gen_p2(p1_, p2_)
 
-    def gen_p2(self, p1, p2):
-        y1 = int(self.batch_manager.y_num[0])
-        y2 = int(self.batch_manager.y_num[1])
+    def gen_p2(self, p1, p2, z_in=None):
+        if z_in is None:
+            y1 = int(self.batch_manager.y_num[0])
+            y2 = int(self.batch_manager.y_num[1])
 
-        c1 = p1/float(y1-1)*2-1
-        c2 = p2/float(y2-1)*2-1
+            c1 = p1/float(y1-1)*2-1
+            c2 = p2/float(y2-1)*2-1
 
-        intv = self.test_intv
-        z_range = [-1, 1]
-        z_varying = np.linspace(z_range[0], z_range[1], num=intv)
-        z_shape = (intv, self.c_num)
+            intv = self.test_intv
+            z_range = [-1, 1]
+            z_varying = np.linspace(z_range[0], z_range[1], num=intv)
+            z_shape = (intv, self.c_num)
 
-        z_c = np.zeros(shape=z_shape)
-        z_c[:,0] = c1
-        z_c[:,1] = c2
-        z_c[:,-1] = z_varying
+            z_c = np.zeros(shape=z_shape)
+            z_c[:,0] = c1
+            z_c[:,1] = c2
+            z_c[:,-1] = z_varying
+        else:
+            z_c = z_in
+            intv = z_c.shape[0]
+
         title = str(p1) + '_' + str(p2)
-
         out_dir = os.path.join(self.model_dir, 'p2_n%d' % intv)
+        img_dir = os.path.join(out_dir, title)
+        print(img_dir)
+        if not os.path.exists(img_dir):
+            os.makedirs(img_dir)
+
+        assert(intv % self.b_num == 0)
+        niter = int(intv / self.b_num)
+
+        ##################
+        # timing
+        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}) # dry run
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
+        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}, options=run_options, run_metadata=run_metadata)
+        from tensorflow.python.client import timeline
+        tl = timeline.Timeline(run_metadata.step_stats)
+        ctf = tl.generate_chrome_trace_format()
+        with open(os.path.join(img_dir, 'timeline.json'), 'w') as f:
+            f.write(ctf)
+        ##################
+        
+        ##################
+        # eval
+        G = None
+        G_div = None
+        for b in range(niter):            
+            G_ = self.sess.run(self.G_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
+            G_, _ = self.batch_manager.denorm(x=G_)
+
+            if G is None:
+                G = G_
+            else:
+                G = np.concatenate((G, G_), axis=0)
+
+        if not self.is_3d:
+            for i in range(intv):
+                x = G[i]
+                img_path = os.path.join(img_dir, '%04d.png' % i)
+                vortplot(x, img_path)
+
+        return G
+
+    def gen_p1(self, p1, z_in=None):
+        if z_in is None:
+            y1 = int(self.batch_manager.y_num[0])
+            
+            c1 = p1/float(y1-1)*2-1
+
+            intv = self.test_intv
+            z_range = [-1, 1]
+            z_varying = np.linspace(z_range[0], z_range[1], num=intv)
+            z_shape = (intv, self.c_num)
+
+            z_c = np.zeros(shape=z_shape)
+            z_c[:,0] = c1
+            z_c[:,-1] = z_varying
+        else:
+            z_c = z_in
+            intv = z_c.shape[0]
+
+        title = str(p1)
+        out_dir = os.path.join(self.model_dir, 'p1_n%d' % intv)
         img_dir = os.path.join(out_dir, title)
         print(img_dir)
         if not os.path.exists(img_dir):
