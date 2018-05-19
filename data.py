@@ -509,8 +509,8 @@ if __name__ == "__main__":
     # setattr(config, 'res_x', 128)
     # setattr(config, 'res_y', 64)
     setattr(config, 'dataset', 'ecmwf_era_interim')
-    setattr(config, 'res_x', 256)
-    setattr(config, 'res_y', 128)
+    setattr(config, 'res_x', 192)
+    setattr(config, 'res_y', 96)
     for data_type in ['velocity']:
         setattr(config, 'data_type', data_type)
         test2d(config)

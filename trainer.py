@@ -401,6 +401,55 @@ class Trainer(object):
             for p2_ in p2:
                 self.gen_p2(p1_, p2_)
 
+    def test_ecmwf(self):        
+        y1 = int(self.batch_manager.y_num[0])
+        y2 = int(self.batch_manager.y_num[1])
+
+        s_factor = 3
+        intv2 = y2*s_factor - 1  # day 5 -> 20, but 19 without last one
+        c2 = np.linspace(-1, 1, num=intv2, endpoint=False)
+
+        days = 31 # January        
+        intv = days*intv2 + 1 # total # z
+
+        z_shape = (intv, self.c_num)
+        z_c = np.zeros(shape=z_shape)
+
+        print(intv2, intv)
+
+        for p1 in range(days):
+            print(p1*intv2,(p1+1)*intv2)
+            c1 = p1/float(y1-1)*2-1
+            z_c[p1*intv2:(p1+1)*intv2,0] = c1
+            z_c[p1*intv2:(p1+1)*intv2,1] = c2
+        z_c[-1,0] = c1
+        z_c[-1,1] = 1
+
+        title = 'jan17'
+        out_dir = os.path.join(self.model_dir, 'p1_n%d' % intv)
+        # dump_path = os.path.join(out_dir, title+'.npz')
+        dump_path = os.path.join(out_dir, title+'.npy')
+        
+        # G = self.gen_p1(title, z_c)
+        # G = G[:,::-1,:,:]
+        # # np.savez_compressed(dump_path, v=G)
+        # np.save(dump_path, G)
+
+        # save ground truth
+        data_dir = 'data/ecmwf_era_interim/v'
+        dump_path = os.path.join(out_dir, title+'_gt.npy')
+        # G = []
+        # for d in range(31):
+        #     for t in range(4):
+        #         file_path = os.path.join(data_dir, '%d_%d.npz' % (d, t))
+        #         with np.load(file_path) as data:
+        #             v = data['x']
+        #         G.append(v)
+
+        # G = np.array(G)
+        # print(G.shape)
+        # np.save(dump_path, G)
+
     def gen_p2(self, p1, p2, z_in=None):
         if z_in is None:
             y1 = int(self.batch_manager.y_num[0])
@@ -531,8 +580,9 @@ class Trainer(object):
     def test(self):
         self.build_test_model(self.test_batch_size)
 
-        # self.test_smoke2()
-        self.test_liquid2()
+        if 'smoke_pos21_size5_f200' in self.load_path: self.test_smoke2()
+        elif 'liquid_pos10_size4_f200' in self.load_path: self.test_liquid2()
+        elif 'ecmwf_era_interim' in self.load_path: self.test_ecmwf()
         return
 
         intv = self.test_intv
