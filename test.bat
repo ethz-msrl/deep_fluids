@@ -1,6 +1,6 @@
 REM ecmwf 2d
 REM ..\manta\build\Release\manta.exe ./scene/ecmwf_era_interim.py
-python main.py --use_curl=False --test_batch_size=29 --dataset=ecmwf_era_interim --res_x=256 --res_y=128 --load_path=log/de/velocity/ecmwf_era_interim/final/eval --is_train=False
+python main.py --use_curl=True --num_conv=5 --test_batch_size=83 --dataset=ecmwf_era_interim --res_x=192 --res_y=96 --load_path=log/de/velocity/ecmwf_era_interim/final/eval --is_train=False
 
 REM REM liquid vis slowmo
 REM python main.py --is_3d=True --use_curl=False --num_conv=3 --test_batch_size=3 --test_intv=150 --dataset=liquid3_mid_uni_vis4_f150 --res_x=96 --res_y=72 --res_z=48 --load_path=log/de/velocity/liquid3_mid_uni_vis4_f150/final/eval --is_train=False --test_slowmo=True

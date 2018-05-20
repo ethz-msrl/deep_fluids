@@ -405,12 +405,12 @@ class Trainer(object):
         y1 = int(self.batch_manager.y_num[0])
         y2 = int(self.batch_manager.y_num[1])
 
-        s_factor = 3
-        intv2 = y2*s_factor - 1  # day 5 -> 20, but 19 without last one
+        s_factor = 1
+        intv2 = y2*s_factor - 1  # day 9 -> 18, but 17 without last one
         c2 = np.linspace(-1, 1, num=intv2, endpoint=False)
 
         days = 31 # January        
-        intv = days*intv2 + 1 # total # z
+        intv = days*intv2 + 1 # 528=16*33
 
         z_shape = (intv, self.c_num)
         z_c = np.zeros(shape=z_shape)
@@ -427,17 +427,17 @@ class Trainer(object):
 
         title = 'jan17'
         out_dir = os.path.join(self.model_dir, 'p1_n%d' % intv)
-        # dump_path = os.path.join(out_dir, title+'.npz')
         dump_path = os.path.join(out_dir, title+'.npy')
         
-        # G = self.gen_p1(title, z_c)
-        # G = G[:,::-1,:,:]
-        # # np.savez_compressed(dump_path, v=G)
-        # np.save(dump_path, G)
+        G = self.gen_p1(title, z_c)
+        G = G[:,::-1,:,:]
+        np.save(dump_path, G)
+        # dump_path = os.path.join(out_dir, title+'.npz')
+        # np.savez_compressed(dump_path, v=G)
 
-        # save ground truth
-        data_dir = 'data/ecmwf_era_interim/v'
-        dump_path = os.path.join(out_dir, title+'_gt.npy')
+        # # save ground truth
+        # data_dir = 'data/ecmwf_era_interim/v'
+        # dump_path = os.path.join(out_dir, title+'_gt.npy')
         # G = []
         # for d in range(31):
         #     for t in range(4):
@@ -573,7 +573,12 @@ class Trainer(object):
             for i in range(intv):
                 x = G[i]
                 img_path = os.path.join(img_dir, '%04d.png' % i)
-                vortplot(x, img_path)
+                
+                # vortplot(x, img_path)                
+                x = (x+1)*127.5 # [0, 255]
+                b_ch = np.ones([self.res_y,self.res_x,1])*127.5
+                x = np.concatenate((x, b_ch), axis=-1)
+                save_image(x, img_path, single=True)
 
         return G
 

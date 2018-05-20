@@ -432,11 +432,30 @@ def test2d(config):
         f.write(str(pi))
         f.write(str(zi))
 
+
+    # save ground truth
+    out_dir = 'data/ecmwf_era_interim/'
+    title = 'jan17'
+    data_dir = 'data/ecmwf_era_interim/v'
+    dump_path = os.path.join(out_dir, title+'_gt.npy')
+    G = []
+    for d in range(31):
+        for t in range(4):
+            file_path = os.path.join(data_dir, '%d_%d.npz' % (d, t))
+            with np.load(file_path) as data:
+                v = data['x']
+            G.append(v)
+
+    G = np.array(G)
+    print(G.shape)
+    np.save(dump_path, G)
+
     # ecmwf_era_interim
     p_list = []
     for p2 in range(31):
-        for p3 in range(4): # because of overlap between 24 and next 0
+        for p3 in range(8): # because of overlap between 24 and next 0
             p_list.append([p2, p3])
+    p_list.append([p2, 8])
 
     f_list = batch_manager.list_from_p(p_list)
     
@@ -448,7 +467,11 @@ def test2d(config):
         x, _ = preprocess(file_path, batch_manager.data_type, batch_manager.x_range, batch_manager.y_range)
         # x = x[::-1,:] # flip...
         img_path = os.path.join(img_dir, '%05d.png' % i)
-        vortplot(x, img_path)
+        # vortplot(x, img_path)
+        x = (x+1)*127.5 # [0, 255]
+        b_ch = np.ones([config.res_y,config.res_x,1])*127.5
+        x = np.concatenate((x, b_ch), axis=-1)
+        save_image(x, img_path, single=True)
 
     mp4_path = os.path.join(config.data_path, '2017_01.mp4')
     fps = 10

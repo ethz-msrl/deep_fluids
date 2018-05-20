@@ -20,12 +20,12 @@ parser.add_argument("--num_year", type=int, default=5)
 parser.add_argument("--min_year", type=float, default=2013)
 parser.add_argument("--max_year", type=float, default=2017)
 parser.add_argument("--year", type=int, default=2017)
-parser.add_argument("--num_day", type=int, default=365)
 parser.add_argument("--min_day", type=float, default=1)
 parser.add_argument("--max_day", type=float, default=365)
-parser.add_argument("--num_time", type=int, default=5)
+parser.add_argument("--num_day", type=int, default=365)
 parser.add_argument("--min_time", type=float, default=0)
 parser.add_argument("--max_time", type=float, default=24)
+parser.add_argument("--num_time", type=int, default=9) # 5
 parser.add_argument("--num_simulations", type=int, default=1825)
 
 parser.add_argument("--resolution_x", type=int, default=192) # 480
@@ -82,15 +82,23 @@ def main():
 			
 			d_ = []
 			# 0
-			v = an[an_idx,:-1,:,:]
+			if j == 0:
+				v = an[an_idx,:-1,:,:]				
 
-			# # debug
-			# plt.subplot(211)
-			# plt.imshow(v[..., 0])
-			# plt.subplot(212)
-			# plt.imshow(v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, 0])
-			# plt.show()
+				# # debug
+				# plt.subplot(211)
+				# plt.imshow(v[..., 0])
+				# plt.subplot(212)
+				# plt.imshow(v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, 0])
+				# plt.show()
 
+				v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
+
+			# use previous one
+			d_.append(v)
+			# 3
+			d = np.load(fc_paths[fc_idx+1])
+			v = d[:-1,:,:]
 			v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
 			d_.append(v)
 			# 6
@@ -98,8 +106,22 @@ def main():
 			v = d[:-1,:,:]
 			v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
 			d_.append(v)
-			# 12
-			v = an[an_idx+1,:-1,:,:]
+			# 9
+			d = np.load(fc_paths[fc_idx+3])
+			v = d[:-1,:,:]
+			v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
+			d_.append(v)
+			# # 12
+			# v = an[an_idx+1,:-1,:,:]
+			# v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
+			# d_.append(v)
+			d = np.load(fc_paths[fc_idx])
+			v = d[:-1,:,:]
+			v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
+			d_.append(v)
+			# 15
+			d = np.load(fc_paths[fc_idx+5])
+			v = d[:-1,:,:]
 			v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
 			d_.append(v)
 			# 18
@@ -107,16 +129,25 @@ def main():
 			v = d[:-1,:,:]
 			v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
 			d_.append(v)
-			# 24
-			if j < args.num_day-1:
-				v = an[an_idx+2,:-1,:,:]
-				v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
-				d_.append(v)
-			else:
-				d = np.load(fc_paths[fc_idx+4])
-				v = d[:-1,:,:]
-				v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
-				d_.append(v)
+			# 21
+			d = np.load(fc_paths[fc_idx+7])
+			v = d[:-1,:,:]
+			v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
+			d_.append(v)
+			# # 24
+			# if j < args.num_day-1:
+			# 	v = an[an_idx+2,:-1,:,:]
+			# 	v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
+			# 	d_.append(v)
+			# else:
+			# 	d = np.load(fc_paths[fc_idx+4])
+			# 	v = d[:-1,:,:]
+			# 	v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
+			# 	d_.append(v)
+			d = np.load(fc_paths[fc_idx+4])
+			v = d[:-1,:,:]
+			v = v[args.sy:args.sy+args.resolution_y,args.sx:args.sx+args.resolution_x, :]
+			d_.append(v)
 
 			for k, d in enumerate(d_):
 				p3 = p3_[k]
