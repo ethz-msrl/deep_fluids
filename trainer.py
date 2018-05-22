@@ -387,9 +387,9 @@ class Trainer(object):
         self.G = denorm_img(self.G_) # for debug
         # self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
 
-    def test_smoke2(self):        
+    def test_smoke2(self):
         p1 = [9, 9.5, 10]
-        p2 = [1]
+        p2 = [1, 2]
         for p1_ in p1:
             for p2_ in p2:
                 self.gen_p2(p1_, p2_)        

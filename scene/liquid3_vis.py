@@ -120,8 +120,8 @@ def test():
 				s.timestep = 1
 
 		markFluidCells(parts=pp, flags=flags)
-		# if i > 100:
-		#     checkHang(parts=m.pp, vel=m.vel, flags=m.flags, threshold=0.01) # 0.05
+		if i > 60:
+			checkHang(parts=pp, vel=vel, flags=flags, threshold=0.01) # 0.05
 		extrapolateMACSimple(flags=flags, vel=vel, distance=4)
 
 		gridParticleIndex(parts=pp, flags=flags, indexSys=pindex, index=gpi)
