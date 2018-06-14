@@ -6,6 +6,7 @@ import json
 import logging
 import numpy as np
 from PIL import Image
+import PIL.ImageOps
 from datetime import datetime
 import imageio
 from glob import glob
@@ -144,6 +145,15 @@ def divplot(x, filename, vmax):
     im.save(filename)
     return x
 
+def magplot(x, filename):
+    m = x[...,0]**2 + x[...,1]**2
+    m /= m.max()    
+    m_map = (-pow(m, 1.5) + 1.5*m)*2    
+    x_ = np.uint8(plt.cm.Blues(m_map)*255)
+    im = Image.fromarray(x_)
+    im.save(filename)
+    return x_
+
 def vortplot(x, filename):
     dudx = x[1:,1:,0] - x[1:,:-1,0]
     dvdx = x[1:,1:,1] - x[1:,:-1,1]
@@ -238,6 +248,18 @@ def convert_png2mp4(imgdir, filename, fps, delete_imgdir=False):
     writer.close()
     
     if delete_imgdir: shutil.rmtree(imgdir)
+
+def b2w(img_dir):
+    dir_path = os.path.join(img_dir, 'w')
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+    imgs = glob("{}/*.png".format(img_dir))
+    for file_path in imgs:
+        img = Image.open(file_path)
+        inverted_image = PIL.ImageOps.invert(img)
+        new_path = os.path.join(dir_path, os.path.basename(file_path))
+        inverted_image.save(new_path)
     
 def rf(o, k, stride): # input size from output size
     return (o-1)*stride + k

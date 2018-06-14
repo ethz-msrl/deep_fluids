@@ -223,6 +223,7 @@ def main():
 
 			s.step()
 			sim_id += 1
+			# break
 		
 		gc.collect()
 		duration = time.time() - start_time

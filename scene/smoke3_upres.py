@@ -29,17 +29,17 @@ parser.add_argument("--num_res", type=int, default=5)
 parser.add_argument("--src_x_pos", type=float, default=0.5)
 parser.add_argument("--src_z_pos", type=float, default=0.5)
 parser.add_argument("--src_y_pos", type=float, default=0.1)
-parser.add_argument("--src_radius", type=float, default=0.075)
+parser.add_argument("--src_radius", type=float, default=0.15)
 parser.add_argument("--min_frames", type=int, default=0)
 parser.add_argument("--max_frames", type=int, default=149)
 parser.add_argument("--num_frames", type=int, default=150)
 parser.add_argument("--num_simulations", type=int, default=750)
-parser.add_argument("--buoyancy", type=float, default=-1.5e-3)
+parser.add_argument("--buoyancy", type=float, default=-4e-3)
 parser.add_argument("--bWidth", type=int, default=1)
 parser.add_argument("--open_bound", type=bool, default=False)
 parser.add_argument("--time_step", type=float, default=1.0)
 parser.add_argument("--clamp_mode", type=int, default=2)
-parser.add_argument("--strength", type=float, default=0.05)
+parser.add_argument("--strength", type=float, default=0.00)
 
 parser.add_argument('--is_test', type=str2bool, default=False)
 parser.add_argument('--vpath', type=str, default='')
@@ -70,6 +70,15 @@ def test():
 	vel = s.create(MACGrid)
 	density = s.create(RealGrid)
 
+	# noise field, tweak a bit for smoke source
+	noise = s.create(NoiseField, loadFromFile=True)
+	noise.posScale = vec3(45)
+	noise.clamp = True
+	noise.clampNeg = 0
+	noise.clampPos = 1
+	noise.valOffset = 0.75
+	noise.timeAnim = 0.2
+
 	flags.initDomain(boundaryWidth=args.bWidth)
 	flags.fillGrid()
 	radius = gs.x*args.src_radius
@@ -82,7 +91,8 @@ def test():
 		v = x[i,...]
 		copyArrayToGridMAC(target=vel, source=v)
 
-		source.applyToGrid(grid=density, value=1)				
+		# source.applyToGrid(grid=density, value=1)
+		densityInflow(flags=flags, density=density, noise=noise, shape=source, scale=1, sigma=0.5)
 		advectSemiLagrange(flags=flags, vel=vel, grid=density, order=2,
 							openBounds=args.open_bound, boundaryWidth=args.bWidth, clampMode=args.clamp_mode)
 		
@@ -157,7 +167,8 @@ def main():
 			advectSemiLagrange(flags=flags, vel=vel, grid=vel,     order=2,
 								openBounds=args.open_bound, boundaryWidth=args.bWidth, clampMode=args.clamp_mode)
 			
-			vorticityConfinement(vel=vel, flags=flags, strength=args.strength)
+			if args.strength > 0:
+				vorticityConfinement(vel=vel, flags=flags, strength=args.strength)
 
 			setWallBcs(flags=flags, vel=vel)
 			addBuoyancy(density=density, vel=vel, gravity=buoyancy, flags=flags)

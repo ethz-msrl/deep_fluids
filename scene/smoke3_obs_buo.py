@@ -55,7 +55,327 @@ parser.add_argument('--vpath', type=str, default='')
 
 args = parser.parse_args()
 
+def blend_test():
+    # os.chdir(os.path.dirname(__file__) + '/..')
+    # print(os.getcwd())
 
+    v_gt_path = os.path.join(args.log_dir, 'smoke3_obs1_buo1_intp_f150', 'v', '0_0_149.npz')
+    with np.load(v_gt_path) as data:
+        v_gt = data['x']
+        v_gt = v_gt[10:96-10,10:64-10,10:64-10,:]
+    nz_ = np.nonzero(v_gt)
+    z = np.ones(v_gt.shape)
+    z[nz_] = 0    
+
+    def jacobian_np3(x):
+        # x: bzyxd
+        dudx = x[:,:,:,1:,0] - x[:,:,:,:-1,0]
+        dvdx = x[:,:,:,1:,1] - x[:,:,:,:-1,1]
+        dwdx = x[:,:,:,1:,2] - x[:,:,:,:-1,2]
+        dudy = x[:,:,:-1,:,0] - x[:,:,1:,:,0] # y fliped
+        dvdy = x[:,:,:-1,:,1] - x[:,:,1:,:,1] # y fliped
+        dwdy = x[:,:,:-1,:,2] - x[:,:,1:,:,2] # y fliped
+        dudz = x[:,1:,:,:,0] - x[:,:-1,:,:,0]
+        dvdz = x[:,1:,:,:,1] - x[:,:-1,:,:,1]
+        dwdz = x[:,1:,:,:,2] - x[:,:-1,:,:,2]
+
+        dudx = np.concatenate((dudx, np.expand_dims(dudx[:,:,:,-1], axis=3)), axis=3)
+        dvdx = np.concatenate((dvdx, np.expand_dims(dvdx[:,:,:,-1], axis=3)), axis=3)
+        dwdx = np.concatenate((dwdx, np.expand_dims(dwdx[:,:,:,-1], axis=3)), axis=3)
+
+        dudy = np.concatenate((np.expand_dims(dudy[:,:,0,:], axis=2), dudy), axis=2)
+        dvdy = np.concatenate((np.expand_dims(dvdy[:,:,0,:], axis=2), dvdy), axis=2)
+        dwdy = np.concatenate((np.expand_dims(dwdy[:,:,0,:], axis=2), dwdy), axis=2)
+
+        dudz = np.concatenate((dudz, np.expand_dims(dudz[:,-1,:,:], axis=1)), axis=1)
+        dvdz = np.concatenate((dvdz, np.expand_dims(dvdz[:,-1,:,:], axis=1)), axis=1)
+        dwdz = np.concatenate((dwdz, np.expand_dims(dwdz[:,-1,:,:], axis=1)), axis=1)
+
+        u = dwdy - dvdz
+        v = dudz - dwdx
+        w = dvdx - dudy
+        
+        j = np.stack([dudx,dudy,dudz,dvdx,dvdy,dvdz,dwdx,dwdy,dwdz], axis=-1)
+        c = np.stack([u,v,w], axis=-1)
+        
+        return j, c    
+
+    def saveimg(x, filename):
+        x /= x.max()
+        x = np.uint8(plt.cm.afmhot(x)*255)
+        from PIL import Image
+        im = Image.fromarray(x)
+        im.save(filename)
+
+    from scipy import interpolate
+    for kind in ['linear']: # , 'nearest', 'zero', 'slinear']:
+        
+        mae_list = []
+        mse_list = []
+        mae_gt_list = []
+        mse_gt_list = []
+        vnum = np.count_nonzero(z)
+        for j in range(args.num_frames):
+            v_gt_path = os.path.join(args.log_dir, 'v', '4_2_%d.npz' % j)
+            with np.load(v_gt_path) as data:
+                v1 = data['x']
+            
+            v_gt_path = os.path.join(args.log_dir, 'v', '5_2_%d.npz' % j)
+            with np.load(v_gt_path) as data:
+                v2 = data['x']
+
+            v12 = np.stack((v1, v2), axis=0)
+            print(v12.shape)
+
+            f_intp = interpolate.interp1d(range(2), v12, axis=0, kind=kind)
+            v = f_intp(0.5)
+            
+            # if j == 80:
+            #     v = v.transpose([2,0,1,3])
+            #     v = v[np.newaxis,:,::-1,:,:]
+                    
+            #     _, c = jacobian_np3(v)
+            #     c = np.sqrt(np.sum(c**2, axis=-1))[0]
+            #     v = np.sqrt(np.sum(v**2, axis=-1))[0]
+            #     idx_mid = int(args.resolution_z*0.5)
+            #     # plt.subplot(121)
+            #     # plt.imshow(v[idx_mid,:,:], cmap=plt.cm.afmhot)
+            #     # plt.subplot(122)
+            #     # plt.imshow(c[idx_mid,:,:], cmap=plt.cm.afmhot)
+            #     # plt.show()        
+
+            #     vort_mag_path = os.path.join('vort_mag_%s.png' % kind)
+            #     saveimg(c[idx_mid,:,:], vort_mag_path)
+            #     vel_mag_path = os.path.join('vel_mag_%s.png' % kind)
+            #     saveimg(v[idx_mid,:,:], vel_mag_path)
+            #     exit()
+                
+            v = v[10:96-10,10:64-10,10:64-10,:]
+            v_ = np.multiply(v, z)
+            # plt.subplot(121)
+            # plt.imshow(v_[40,:,:,0])
+            # plt.subplot(122)
+            # plt.imshow(v[40,:,:,0])
+            # plt.show()
+            mae_err = np.sum(np.abs(v_))/vnum # mean absolute error
+            mse_err = np.sum(v_**2)/vnum # mean absolute error
+            mae_list.append(mae_err)
+            mse_list.append(mse_err)
+
+        save_dir = 'log/de/velocity/smoke3_obs11_buo4_f150/final/eval/p2_n150'
+        mae_path = os.path.join(save_dir, '%s_2_linear_mae.csv' % str(p[i]))
+        np.savetxt(mae_path, mae_list, delimiter=',')                
+        
+
+def obs_penetration_test():
+    os.chdir(os.path.dirname(__file__) + '/..')
+
+    nz = []
+    v_gt_path = os.path.join(args.log_dir, 'v', '4_2_149.npz')
+    with np.load(v_gt_path) as data:
+        v_gt = data['x']
+        v_gt = v_gt[10:96-10,10:64-10,10:64-10,:]
+    nz_ = np.nonzero(v_gt)
+    z = np.ones(v_gt.shape)
+    z[nz_] = 0    
+    nz.append(z)
+
+    v_gt_path = os.path.join(args.log_dir, 'smoke3_obs1_buo1_intp_f150', 'v', '0_0_149.npz')
+    with np.load(v_gt_path) as data:
+        v_gt = data['x']
+        v_gt = v_gt[10:96-10,10:64-10,10:64-10,:]
+    nz_ = np.nonzero(v_gt)
+    z = np.ones(v_gt.shape)
+    z[nz_] = 0    
+    nz.append(z)
+
+    v_gt_path = os.path.join(args.log_dir, 'v', '5_2_149.npz')
+    with np.load(v_gt_path) as data:
+        v_gt = data['x']
+        v_gt = v_gt[10:96-10,10:64-10,10:64-10,:]
+    nz_ = np.nonzero(v_gt)
+    z = np.ones(v_gt.shape)
+    z[nz_] = 0    
+    nz.append(z)
+
+    # print(os.getcwd())
+    p = [4, 4.5, 5]
+    for i, p0 in enumerate([0.44, 0.47, 0.5]):
+        v_path = os.path.join('log/de/velocity/smoke3_obs11_buo4_f150/final/eval/p2_n150', '%s_2.npz' % str(p[i]))
+        with np.load(v_path) as data:
+            x = data['v']
+            
+        mae_list = []
+        mse_list = []
+        mae_gt_list = []
+        mse_gt_list = []
+        vnum = np.count_nonzero(nz[i])
+        for j in range(args.num_frames):
+            v = x[j,...]
+            v = v[10:96-10,10:64-10,10:64-10,:]
+            v_ = np.multiply(v, nz[i])
+            # plt.subplot(121)
+            # plt.imshow(v_[40,:,:,0])
+            # plt.subplot(122)
+            # plt.imshow(v[40,:,:,0])
+            # plt.show()
+            mae_err = np.sum(np.abs(v_))/vnum # mean absolute error
+            mse_err = np.sum(v_**2)/vnum # mean absolute error
+            mae_list.append(mae_err)
+            mse_list.append(mse_err)
+
+        # obs_path = os.path.join(args.log_dir, 'obs', '%f.npz' % p0)
+        # with np.load(obs_path) as data:
+        #     obs_flag = data['x']
+        #     vnum = np.count_nonzero(obs_flag)
+            # # debug
+            # obs_flag = obs_flag.transpose([2,0,1,3])
+            # idx_mid = int(args.resolution_z*0.5)
+            # plt.imshow(obs_flag[idx_mid,:,:,0])
+            # plt.show()
+        
+        # obs_path = os.path.join(args.log_dir, 'obs', '%f_big.npz' % p0)
+        # with np.load(obs_path) as data:
+        #     obs_big_flag = data['x']
+
+        # v_gt_path = os.path.join(args.log_dir, 'v', '%s_2_%d.npz' % (str(p[i]), j))
+        # with np.load(v_gt_path) as data:
+        #     v_gt = data['x']
+        #     v_gt_ = np.multiply(v_gt, obs_flag)
+        #     mae_err = np.sum(np.abs(v_gt_))/vnum # mean absolute error
+        #     mse_err = np.sum(v_gt_**2)/vnum # mean absolute error
+        #     mae_gt_list.append(mae_err)
+        #     mse_gt_list.append(mse_err)
+
+
+        # v_path = os.path.join('log/de/velocity/smoke3_obs11_buo4_f150/final/eval/p2_n150', '%s_2.npz' % str(p[i]))
+        # with np.load(v_path) as data:
+        #     x = data['v']
+        
+        # mae_list = []
+        # mse_list = []
+        # mae_gt_list = []
+        # mse_gt_list = []
+        # for j in range(args.num_frames):
+        #     v = x[j,...]
+        #     v_ = np.multiply(v, obs_flag)
+        #     mae_err = np.sum(np.abs(v_))/vnum # mean absolute error
+        #     mse_err = np.sum(v_**2)/vnum # mean absolute error
+        #     mae_list.append(mae_err)
+        #     mse_list.append(mse_err)
+
+            # if j == 130:
+            #     v_big = np.multiply(v, 1-obs_flag)
+            #     v_big = np.multiply(v_big, obs_big_flag)                
+            #     n = np.sum(np.abs(v_big))
+            #     print(n)
+            #     if i == 0:
+            #         norm = n
+            #     else:                    
+            #         factor = float(norm)/n
+            #         print(factor)
+
+            # # debug
+            # print(v.min(), v.max(), v_.min(), v_.max())
+            # v_ = v_.transpose([2,0,1,3])
+            # idx_mid = int(args.resolution_z*0.5)
+            # plt.subplot(121)
+            # plt.imshow(v_[idx_mid,:,:,0], origin='lower')
+            # plt.subplot(122)
+            # v = v.transpose([2,0,1,3])
+            # plt.imshow(v[idx_mid,:,:,0], origin='lower')
+            # plt.show()
+
+        # plt.plot(range(args.num_frames), mae_list)
+        # # plt.plot(range(args.num_frames), mse_list)
+        # plt.show()
+
+        save_dir = 'log/de/velocity/smoke3_obs11_buo4_f150/final/eval/p2_n150'
+        mae_path = os.path.join(save_dir, '%s_2_mae.csv' % str(p[i]))
+        np.savetxt(mae_path, mae_list, delimiter=',')
+        mse_path = os.path.join(save_dir, '%s_2_mse.csv' % str(p[i]))
+        np.savetxt(mse_path, mse_list, delimiter=',')
+        mae_path = os.path.join(save_dir, '%s_2_gt_mae.csv' % str(p[i]))
+        np.savetxt(mae_path, mae_gt_list, delimiter=',')
+        # mse_path = os.path.join(save_dir, '%s_2_gt_mse.csv' % str(p[i]))
+        # np.savetxt(mse_path, mse_gt_list, delimiter=',')
+
+        # idx = np.argmax(mae_list)
+        # print('max frame:', idx)
+        idx = 80
+
+        v = x[idx,...]
+        v = v.transpose([2,0,1,3])
+        v = v[np.newaxis,:,::-1,:,:]
+        def jacobian_np3(x):
+            # x: bzyxd
+            dudx = x[:,:,:,1:,0] - x[:,:,:,:-1,0]
+            dvdx = x[:,:,:,1:,1] - x[:,:,:,:-1,1]
+            dwdx = x[:,:,:,1:,2] - x[:,:,:,:-1,2]
+            dudy = x[:,:,:-1,:,0] - x[:,:,1:,:,0] # y fliped
+            dvdy = x[:,:,:-1,:,1] - x[:,:,1:,:,1] # y fliped
+            dwdy = x[:,:,:-1,:,2] - x[:,:,1:,:,2] # y fliped
+            dudz = x[:,1:,:,:,0] - x[:,:-1,:,:,0]
+            dvdz = x[:,1:,:,:,1] - x[:,:-1,:,:,1]
+            dwdz = x[:,1:,:,:,2] - x[:,:-1,:,:,2]
+
+            dudx = np.concatenate((dudx, np.expand_dims(dudx[:,:,:,-1], axis=3)), axis=3)
+            dvdx = np.concatenate((dvdx, np.expand_dims(dvdx[:,:,:,-1], axis=3)), axis=3)
+            dwdx = np.concatenate((dwdx, np.expand_dims(dwdx[:,:,:,-1], axis=3)), axis=3)
+
+            dudy = np.concatenate((np.expand_dims(dudy[:,:,0,:], axis=2), dudy), axis=2)
+            dvdy = np.concatenate((np.expand_dims(dvdy[:,:,0,:], axis=2), dvdy), axis=2)
+            dwdy = np.concatenate((np.expand_dims(dwdy[:,:,0,:], axis=2), dwdy), axis=2)
+
+            dudz = np.concatenate((dudz, np.expand_dims(dudz[:,-1,:,:], axis=1)), axis=1)
+            dvdz = np.concatenate((dvdz, np.expand_dims(dvdz[:,-1,:,:], axis=1)), axis=1)
+            dwdz = np.concatenate((dwdz, np.expand_dims(dwdz[:,-1,:,:], axis=1)), axis=1)
+
+            u = dwdy - dvdz
+            v = dudz - dwdx
+            w = dvdx - dudy
+            
+            j = np.stack([dudx,dudy,dudz,dvdx,dvdy,dvdz,dwdx,dwdy,dwdz], axis=-1)
+            c = np.stack([u,v,w], axis=-1)
+            
+            return j, c            
+        _, c = jacobian_np3(v)
+        c = np.sqrt(np.sum(c**2, axis=-1))[0]
+        v = np.sqrt(np.sum(v**2, axis=-1))[0]
+        idx_mid = int(args.resolution_z*0.5)
+        # plt.subplot(121)
+        # plt.imshow(v[idx_mid,:,:], cmap=plt.cm.afmhot)
+        # plt.subplot(122)
+        # plt.imshow(c[idx_mid,:,:], cmap=plt.cm.afmhot)
+        # plt.show()
+
+        def saveimg(x, filename):
+            x /= x.max()
+            x = np.uint8(plt.cm.afmhot(x)*255)
+            from PIL import Image
+            im = Image.fromarray(x)
+            im.save(filename)
+
+        vort_mag_path = os.path.join(save_dir, '%s_2_vort_mag_%d.png' % (str(p[i]), idx))
+        saveimg(c[idx_mid,:,:], vort_mag_path)
+        vel_mag_path = os.path.join(save_dir, '%s_2_vel_mag_%d.png' % (str(p[i]), idx))
+        saveimg(v[idx_mid,:,:], vel_mag_path)
+
+    v_gt_path = os.path.join(args.log_dir, 'smoke3_obs1_buo1_intp_f150', 'v', '0_0_80.npz')
+    with np.load(v_gt_path) as data:
+        v = data['x']
+    v = v.transpose([2,0,1,3])
+    v = v[np.newaxis,:,::-1,:,:]
+
+    _, c = jacobian_np3(v)
+    c = np.sqrt(np.sum(c**2, axis=-1))[0]
+    v = np.sqrt(np.sum(v**2, axis=-1))[0]
+
+    vort_mag_path = os.path.join(save_dir, '%s_2_vort_mag_%d_gt.png' % (str(p[i]), idx))
+    saveimg(c[idx_mid,:,:], vort_mag_path)
+    vel_mag_path = os.path.join(save_dir, '%s_2_vel_mag_%d_gt.png' % (str(p[i]), idx))
+    saveimg(v[idx_mid,:,:], vel_mag_path)    
+                
 def get_param(p1, p2):
     min_p1 = args.min_obs_x_pos
     max_p1 = args.max_obs_x_pos
@@ -202,7 +522,25 @@ def main():
         obs_center = gs*vec3(p0,args.obs_y_pos,args.obs_z_pos)
         obs = s.create(Sphere, center=obs_center, radius=obs_radius)
         obs.applyToGrid(grid=flags, value=FlagObstacle)
-        
+
+        # obs_radius = gs.x*args.obs_radius
+        # for p0 in [0.44, 0.47, 0.5]:
+        #     obs_center = gs*vec3(0.44,args.obs_y_pos,args.obs_z_pos)
+        #     obs = s.create(Sphere, center=obs_center, radius=0.10)
+        #     obs.applyToGrid(grid=vel, value=vec3(1,1,1))
+        #     copyGridToArrayMAC(target=v_, _Source=vel)
+        #     v_file_path = os.path.join(args.log_dir, 'obs', '%f.npz' % p0)
+        #     np.savez_compressed(v_file_path, 
+        #                         x=v_)
+
+        #     obs = s.create(Sphere, center=obs_center, radius=obs_radius+0.3)
+        #     obs.applyToGrid(grid=vel, value=vec3(1,1,1))
+        #     copyGridToArrayMAC(target=v_, _Source=vel)
+        #     v_file_path = os.path.join(args.log_dir, 'obs', '%f_big.npz' % p0)
+        #     np.savez_compressed(v_file_path, 
+        #                         x=v_)
+        # exit()
+
         buoyancy = vec3(0,p1,0)		
         for t in trange(args.num_frames, desc='sim'):
             source.applyToGrid(grid=density, value=1)
@@ -227,7 +565,7 @@ def main():
             # copyGridToArrayVec3(target=s_, source=stream)
 
             v_range = [np.minimum(v_range[0], v_.min()),
-                        np.maximum(v_range[1], v_.max())]
+                       np.maximum(v_range[1], v_.max())]
             # d_range = [np.minimum(d_range[0], d_.min()),
             # 		   np.maximum(d_range[1], d_.max())]
             # s_range = [np.minimum(s_range[0], s_.min()),
@@ -293,7 +631,9 @@ def main():
 
 
 if __name__ == '__main__':
-    if args.is_test:
-        test()
-    else:
-        main()
+    blend_test()
+    # obs_penetration_test()
+    # if args.is_test:
+    #     test()
+    # else:
+    #     main()

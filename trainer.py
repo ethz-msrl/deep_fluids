@@ -7,7 +7,7 @@ from datetime import datetime
 import time
 
 from models import *
-from utils import save_image, convert_png2mp4, streamplot, vortplot, gradplot, jacoplot, divplot
+from utils import save_image, convert_png2mp4, streamplot, vortplot, gradplot, jacoplot, divplot, magplot
 
 class Trainer(object):
     def __init__(self, config, batch_manager):
@@ -388,13 +388,221 @@ class Trainer(object):
         # self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
 
     def test_smoke2(self):
+        # reconstruction test
+        self.test_intv = 200
+        intv = self.test_intv
+
+        # z1 = (0.48 - 0.2) / (0.8-0.2) * 2 - 1
+        z1 = 4.0 / 9.0 * 2 - 1
+        z2 = 2.0 / 9.0 * 2 - 1
+        # print(z1)
+        z_in = np.zeros(shape=[intv, self.c_num])
+        z_varying = np.linspace(-1, 1, num=intv)
+        z_in[:,0] = z1
+        z_in[:,1] = z2
+        z_in[:,2] = z_varying
+
+        G = self.gen_p2(0, 0, z_in)
+
+        out_dir = os.path.join(self.model_dir, 'p2_n%d' % intv)
+        title = '0_0'
+        dump_path = os.path.join(out_dir, title+'.npz')
+        np.savez_compressed(dump_path, v=G)
+
+        from subprocess import call
+        call(["../manta/build_nogui_omp/Release/manta.exe",
+                "./scene/smoke_pos_size.py",
+                "--is_test=True",
+                "--vpath={}".format(dump_path)])
+        return
+
+
+        # interpolation test
+        self.test_intv = 200
+        intv = self.test_intv
+        z_list = []
+
+        z_in = np.zeros(shape=[intv, self.c_num])
+        z_varying = np.linspace(-1, 1, num=intv)
+        z_in[:,0] = z_varying
+        z_in[:,1] = 0
+        z_in[:,2] = 0
+        z_list.append(z_in)
+
+        z_in = np.zeros(shape=[intv, self.c_num])
+        z_varying = np.linspace(-1, 1, num=intv)
+        z_in[:,0] = 0
+        z_in[:,1] = z_varying
+        z_in[:,2] = 0
+        z_list.append(z_in)
+
+        z_in = np.zeros(shape=[intv, self.c_num])
+        z_varying = np.linspace(-1, 1, num=intv)
+        z_in[:,0] = z_varying
+        z_in[:,1] = z_varying
+        z_in[:,2] = 0
+        z_list.append(z_in)
+
+        for i, z_in in enumerate(z_list):
+            self.gen_p2(i, 0, z_in)
+        return
+
+
+        # # extrapolation test
+        # self.test_intv = 100
+        # intv = self.test_intv
+        # z_list = []
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(0.8, 1.6, num=intv) # 30%
+        # z_in[:,0] = z_varying
+        # z_in[:,2] = 0 # -0.6
+        # z_list.append(z_in)
+        # z_org = (z_varying+1)*0.5*(0.8-0.2)+0.2
+        # print(z_org[50], z_org[62], z_org[74], z_org[86], z_org[99])
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(0.8, 1.6, num=intv)
+        # z_in[:,1] = z_varying
+        # z_in[:,2] = 0
+        # z_list.append(z_in)
+        # z_org = (z_varying+1)*0.5*(0.12-0.04)+0.2
+        # print(z_org[50], z_org[62], z_org[74], z_org[86], z_org[99])
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(0.8, 1.6, num=intv)
+        # z_org = (z_varying+1)*0.5*199
+        # print(z_org[50], z_org[62], z_org[74], z_org[86], z_org[99])
+        # z_in[:,2] = z_varying
+        # z_list.append(z_in)
+
+        # for i, z_in in enumerate(z_list):
+        #     self.gen_p2(i, 0, z_in)
+        # return
+
         p1 = [9, 9.5, 10]
         p2 = [1, 2]
         for p1_ in p1:
             for p2_ in p2:
-                self.gen_p2(p1_, p2_)        
+                self.gen_p2(p1_, p2_)
 
-    def test_liquid2(self):        
+    def test_liquid2(self):
+        # interpolation test
+        # self.test_intv = 24
+        intv = self.test_intv
+        z_list = []
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = z_varying
+        # z_in[:,1] = 0
+        # z_in[:,2] = -0.63
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = 0
+        # z_in[:,1] = z_varying
+        # z_in[:,2] = -0.63
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = -1
+        # z_in[:,1] = -1
+        # z_in[:,2] = z_varying
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = 4/9.0*2-1
+        # z_in[:,1] = 4/9.0*2-1
+        # z_in[:,2] = z_varying
+        # z_list.append(z_in)
+
+
+        z_in = np.zeros(shape=[intv, self.c_num])
+        z_varying = np.linspace(-1, 1, num=intv)
+        z_in[:,0] = z_varying
+        z_in[:,1] = -1
+        z_in[:,2] = -1
+        z_list.append(z_in)
+
+        z_in = np.zeros(shape=[intv, self.c_num])
+        z_varying = np.linspace(-1, 1, num=intv)
+        z_in[:,0] = z_varying
+        z_in[:,1] = -1
+        z_in[:,2] = -0.78
+        z_list.append(z_in)
+
+        z_in = np.zeros(shape=[intv, self.c_num])
+        z_varying = np.linspace(-1, 1, num=intv)
+        z_in[:,0] = z_varying
+        z_in[:,1] = -1
+        z_in[:,2] = -0.63
+        z_list.append(z_in)
+
+        z_in = np.zeros(shape=[intv, self.c_num])
+        z_varying = np.linspace(-1, 1, num=intv)
+        z_in[:,0] = z_varying
+        z_in[:,1] = -1
+        z_in[:,2] = -0.3
+        z_list.append(z_in)
+
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = 0.5/9*2-1
+        # z_in[:,1] = -1
+        # z_in[:,2] = z_varying
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = z_varying
+        # z_in[:,1] = z_varying
+        # z_in[:,2] = -1
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = z_varying
+        # z_in[:,1] = z_varying
+        # z_in[:,2] = -0.63
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = z_varying
+        # z_in[:,1] = z_varying
+        # z_in[:,2] = -0.3
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = z_varying
+        # z_in[:,1] = z_varying
+        # z_in[:,2] = 0
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = z_varying
+        # z_in[:,1] = z_varying
+        # z_in[:,2] = 0.5
+        # z_list.append(z_in)
+
+        # z_in = np.zeros(shape=[intv, self.c_num])
+        # z_varying = np.linspace(-1, 1, num=intv)
+        # z_in[:,0] = z_varying
+        # z_in[:,1] = z_varying
+        # z_in[:,2] = 1.0
+        # z_list.append(z_in)
+
+        for i, z_in in enumerate(z_list):
+            self.gen_p2(i, 0, z_in)
+        return
+
         p1 = [0, 4, 9]
         p2 = [0, 1, 3]
         for p1_ in p1:
@@ -511,8 +719,11 @@ class Trainer(object):
             for i in range(intv):
                 x = G[i]
                 img_path = os.path.join(img_dir, '%04d.png' % i)
-                vortplot(x, img_path)
-
+                
+                if 'smoke' in img_path: 
+                    vortplot(x, img_path)
+                else:
+                    magplot(x, img_path)
         return G
 
     def gen_p1(self, p1, z_in=None):
@@ -586,7 +797,7 @@ class Trainer(object):
         self.build_test_model(self.test_batch_size)
 
         if 'smoke_pos21_size5_f200' in self.load_path: self.test_smoke2()
-        elif 'liquid_pos10_size4_f200' in self.load_path: self.test_liquid2()
+        elif 'liquid' in self.load_path: self.test_liquid2()
         elif 'ecmwf_era_interim' in self.load_path: self.test_ecmwf()
         return
 
@@ -801,10 +1012,14 @@ class Trainer(object):
 
     def generate(self, inputs, root_path=None, idx=None):
         generated = []
+        # for i, z_sample in enumerate(inputs):
+        #     generated.append(self.sess.run(self.G_div_, {self.y: z_sample}))
+        
         for i, z_sample in enumerate(inputs):
             generated.append(self.sess.run(self.G, {self.y: z_sample}))
             
         c_concat = np.concatenate(tuple(generated[:-1]), axis=0)
+        # c_concat = ((c_concat/0.5+1)*127.5).astype(np.uint8)
         c_path = os.path.join(root_path, '{}_c.png'.format(idx))
         save_image(c_concat, c_path, nrow=self.b_num)
         print("[*] Samples saved: {}".format(c_path))
