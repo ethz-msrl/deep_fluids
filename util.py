@@ -37,9 +37,8 @@ def prepare_dirs_and_logger(config):
         config.model_dir = config.load_path
 
     elif not hasattr(config, 'model_dir'):    
-        model_name = "{}/{}/{}/{}/{}_{}".format(
-            config.arch, config.data_type, 
-            config.dataset, config.title, get_time(), config.tag)
+        model_name = "{}/{}_{}_{}".format(
+            config.dataset, get_time(), config.arch, config.tag)
 
         config.model_dir = os.path.join(config.log_dir, model_name)
     
@@ -82,15 +81,18 @@ def make_grid(tensor, nrow=8, padding=2,
     return grid
 
 def save_image(tensor, filename, nrow=8, padding=2,
-               normalize=False, scale_each=False, single=False):
+               normalize=False, scale_each=False, single=False,
+               flip=True):
     if not single:
+        if flip: tensor = tensor[:,::-1]
         ndarr = make_grid(tensor, nrow=nrow, padding=padding,
                                 normalize=normalize, scale_each=scale_each)
     else:
+        if flip: tensor = tensor[:,::-1]
         h, w = tensor.shape[0], tensor.shape[1]
         ndarr = np.zeros([h,w,3], dtype=np.uint8)
         ndarr[:,:] = tensor[:,:]
-        
+    
     im = Image.fromarray(ndarr)
     im.save(filename)
 

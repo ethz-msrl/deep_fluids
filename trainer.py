@@ -6,8 +6,8 @@ from tqdm import trange
 from datetime import datetime
 import time
 
-from models import *
-from utils import save_image, convert_png2mp4, streamplot, vortplot, gradplot, jacoplot, divplot, magplot
+from model import *
+from util import *
 
 class Trainer(object):
     def __init__(self, config, batch_manager):
@@ -30,21 +30,14 @@ class Trainer(object):
         self.res_z = config.res_z
         self.c_num = batch_manager.c_num
         self.b_num = config.batch_size
+        self.test_b_num = config.test_batch_size
 
         self.repeat = config.repeat
         self.filters = config.filters
         self.num_conv = config.num_conv
-        self.last_k = config.last_k
-        self.skip_concat = config.skip_concat
-        if config.act == 'lrelu':
-            self.act = lrelu
-        elif config.act == 'elu':
-            self.act = tf.nn.elu
-        else:
-            self.act = tf.nn.softsign
         self.w1 = config.w1
         self.w2 = config.w2
-        # self.l1 = config.l1
+        if 'dg' in self.arch: self.w3 = config.w3
 
         self.use_c = config.use_curl
         if self.use_c:
@@ -64,7 +57,8 @@ class Trainer(object):
 
         self.start_step = config.start_step
         self.step = tf.Variable(self.start_step, name='step', trainable=False)
-        self.max_step = config.max_step
+        # self.max_step = config.max_step
+        self.max_step = int(config.max_epoch // batch_manager.epochs_per_step)
 
         self.lr_update = config.lr_update
         if self.lr_update == 'decay':
@@ -76,25 +70,6 @@ class Trainer(object):
         elif self.lr_update == 'step':
             self.g_lr = tf.Variable(config.lr_max, name='g_lr')
             self.g_lr_update = tf.assign(self.g_lr, tf.maximum(self.g_lr*0.5, config.lr_min), name='g_lr_update')    
-        elif self.lr_update == 'cyclic':
-            lr_min = config.lr_min
-            lr_max = config.lr_max
-            m = config.num_cycle
-            period = int(self.max_step/m)
-            self.g_lr = tf.Variable(lr_min, name='g_lr')
-            self.g_lr_update = tf.assign(self.g_lr, 
-               lr_min+0.5*(lr_max-lr_min)*(tf.cos(tf.cast(self.step%period, tf.float32)*np.pi/period)+1), name='g_lr_update')
-        elif self.lr_update == 'test':
-            lr_min = config.lr_min
-            lr_max = config.lr_max
-            self.g_lr = tf.Variable(lr_min, name='g_lr')
-            lr_min_l = np.log10(lr_min)
-            lr_max_l = np.log10(lr_max)
-            # print(lr_min_l, lr_max_l)
-            self.g_lr_update = tf.assign(self.g_lr, 
-               10**(lr_min_l + (lr_max_l-lr_min_l)*tf.cast(self.step/self.max_step, tf.float32)), name='g_lr_update')
-        elif self.lr_update == 'freeze':
-            self.lr_max = config.lr_max
         else:
             raise Exception("[!] Invalid lr update method")
 
@@ -102,15 +77,9 @@ class Trainer(object):
         self.log_step = config.log_step
         self.test_step = config.test_step
         self.save_sec = config.save_sec
-        self.test_intv = config.test_intv
-        self.test_batch_size = config.test_batch_size
-        self.test_slowmo = config.test_slowmo
 
         self.is_train = config.is_train
         self.build_model()
-
-        if self.is_3d:
-            self.build_test_model(self.test_batch_size)
 
         self.saver = tf.train.Saver(max_to_keep=1000)
         self.summary_writer = tf.summary.FileWriter(self.model_dir)
@@ -139,114 +108,66 @@ class Trainer(object):
     def build_model(self):
         if self.use_c:
             self.G_s, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape, 
-                                               num_conv=self.num_conv, last_k=self.last_k,
-                                               repeat=self.repeat, skip_concat=self.skip_concat,
-                                               act=self.act)
+                                               num_conv=self.num_conv, repeat=self.repeat)
             self.G_ = curl(self.G_s)
         else:
             self.G_, self.G_var = GeneratorBE(self.y, self.filters, self.output_shape,
-                                              num_conv=self.num_conv, last_k=self.last_k,
-                                              repeat=self.repeat, skip_concat=self.skip_concat,
-                                              act=self.act)
+                                              num_conv=self.num_conv, repeat=self.repeat)
         self.G = denorm_img(self.G_) # for debug
 
         self.G_jaco_, self.G_vort_ = jacobian(self.G_)
         self.G_vort = denorm_img(self.G_vort_)
-        self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
         
         # to test
         self.z = tf.random_uniform(shape=[self.b_num, self.c_num], minval=-1.0, maxval=1.0)
         if self.use_c:
             self.G_z_s, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                        num_conv=self.num_conv, last_k=self.last_k,
-                                        repeat=self.repeat, skip_concat=self.skip_concat,
-                                        act=self.act, reuse=True)
+                                        num_conv=self.num_conv, repeat=self.repeat, reuse=True)
             self.G_z_ = curl(self.G_z_s)
         else:
             self.G_z_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k,
-                                       repeat=self.repeat, skip_concat=self.skip_concat,
-                                       act=self.act, reuse=True)
+                                       num_conv=self.num_conv, repeat=self.repeat, reuse=True)
         self.G_z = denorm_img(self.G_z_) # for debug
 
         self.G_z_jaco_, self.G_z_vort_ = jacobian(self.G_z_)
         self.G_z_vort = denorm_img(self.G_z_vort_)
-        self.G_z_div_ = divergence(self.G_z_*self.batch_manager.x_range)
+
+        if 'dg' in self.arch:
+            # discriminator
+            # self.D_x, self.D_var = DiscriminatorPatch(self.x, self.filters)
+            D_in = tf.concat([self.x, self.x_jaco], axis=-1)
+            self.D_x, self.D_var = DiscriminatorPatch(D_in, self.filters)
+            # self.D_G, _ = DiscriminatorPatch(self.G_, self.filters, reuse=True)
+            G_in = tf.concat([self.G_, self.G_jaco_], axis=-1)
+            self.D_G, _ = DiscriminatorPatch(G_in, self.filters, reuse=True)
         
         show_all_variables()
 
-        if self.lr_update == 'freeze':
-            num_layers = int(self.G_var[-1].name.split('_')[0].split('/')[1])+1
-            layers = []
-            t0 = 0.5 # 0.5 for linear
-            is_cubic = True
-            t_ = np.linspace(t0, 1, num_layers, dtype=np.float32)
-            if is_cubic: t_ = np.power(t_, 3)
-            self.max_steps = (self.max_step * t_).astype(np.int)
-            a_ = self.lr_max / t_
-            self.g_lr_update = []
-            for i in range(num_layers):
-                g_vars = [var for var in self.G_var if '/{}_'.format(i) in var.name]
-                lr = tf.Variable(a_[i], name='lr%02d' % i)
-                layers.append({
-                    'v': g_vars, 
-                    'lr': lr,
-                })
-                lr_update = tf.assign(lr,
-                    0.5*a_[i]*(tf.cos(tf.cast(self.step, tf.float32)*np.pi/self.max_steps[i])+1))
-                self.g_lr_update.append(lr_update)
-            self.max_steps = self.max_steps.tolist()
+        if self.optimizer == 'adam':
+            optimizer = tf.train.AdamOptimizer
+            g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
+        elif self.optimizer == 'gd':
+            optimizer = tf.train.GradientDescentOptimizer
+            g_optimizer = optimizer(self.g_lr)
         else:
-            if self.optimizer == 'adam':
-                optimizer = tf.train.AdamOptimizer
-                g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
-            elif self.optimizer == 'gd':
-                optimizer = tf.train.GradientDescentOptimizer
-                g_optimizer = optimizer(self.g_lr)
-            else:
-                raise Exception("[!] Invalid opimizer")
+            raise Exception("[!] Invalid opimizer")
 
         # losses
         self.g_loss_l1 = tf.reduce_mean(tf.abs(self.G_ - self.x))
         self.g_loss_j_l1 = tf.reduce_mean(tf.abs(self.G_jaco_ - self.x_jaco))
-
-        # G_n2 = tf.nn.l2_normalize(self.G_, axis=-1)
-        # x_n2 = tf.nn.l2_normalize(self.x, axis=-1)
-        # w = tf.reduce_sum(tf.multiply(self.x, self.x), axis=-1, keepdims=True)
-        # # self.g_loss_cos = tf.reduce_sum(tf.multiply(G_n2, x_n2), axis=-1)
-        # # self.g_loss_cos = tf.reduce_mean(1-self.g_loss_cos) # [0, 2]
-        # self.g_loss_cos = tf.losses.cosine_distance(G_n2, x_n2, weights=w, axis=-1)
-
-        # Gj_n2 = tf.nn.l2_normalize(self.G_jaco_, axis=-1)
-        # xj_n2 = tf.nn.l2_normalize(self.x_jaco, axis=-1)
-        # wj = tf.reduce_sum(tf.multiply(self.x_jaco, self.x_jaco), axis=-1, keepdims=True)
-        # # self.g_loss_j_cos = tf.reduce_sum(tf.multiply(Gj_n2, xj_n2), axis=-1)
-        # # self.g_loss_j_cos = tf.reduce_mean(1-self.g_loss_j_cos) # [0, 2]
-        # self.g_loss_j_cos = tf.losses.cosine_distance(Gj_n2, xj_n2, weights=wj, axis=-1)
-
-        self.g_loss_ke = tf.abs(tf.reduce_mean(tf.square(self.G_)) - tf.reduce_mean(tf.square(self.x)))
-        self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
-        self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
-        self.g_loss_z_div = tf.reduce_mean(tf.abs(self.G_z_div_))
-        self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
-
         self.g_loss = self.g_loss_l1*self.w1 + self.g_loss_j_l1*self.w2
-        # if self.l1:
-        # else:
-        #     self.g_loss = self.g_loss_cos*self.w1 + self.g_loss_j_cos*self.w2
+        
+        if 'dg' in self.arch:
+            self.g_loss_real = tf.reduce_mean(tf.square(self.D_G-1))
+            self.d_loss_fake = tf.reduce_mean(tf.square(self.D_G))
+            self.d_loss_real = tf.reduce_mean(tf.square(self.D_x-1))
 
-        if self.lr_update == 'freeze':
-            self.opts = []
-            for i in range(num_layers):
-                grad = tf.gradients(self.g_loss, layers[i]['v'])
-                opt = tf.train.AdamOptimizer(layers[i]['lr'], beta1=self.beta1, beta2=self.beta2)
-                if i == num_layers-1:
-                    self.opts.append(opt.apply_gradients(zip(grad, layers[i]['v']), global_step=self.step))
-                else:
-                    self.opts.append(opt.apply_gradients(zip(grad, layers[i]['v'])))
-            self.g_optim = tf.group(self.opts)
-        else:
-            self.g_optim = g_optimizer.minimize(self.g_loss, global_step=self.step, var_list=self.G_var)
+            self.g_loss += self.g_loss_real*self.w3
+
+            self.d_loss = self.d_loss_real + self.d_loss_fake
+            self.d_optim = g_optimizer.minimize(self.d_loss, var_list=self.D_var)
+
+        self.g_optim = g_optimizer.minimize(self.g_loss, global_step=self.step, var_list=self.G_var)
         self.epoch = tf.placeholder(tf.float32)
 
         # summary
@@ -255,47 +176,36 @@ class Trainer(object):
             tf.summary.image("G_z", self.G_z),
             tf.summary.image("G_vort", self.G_vort),
             
-            tf.summary.image("G_div", self.G_div_),
-            tf.summary.image("G_z_div", self.G_z_div_),
-
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/g_loss_l1", self.g_loss_l1),
             tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
-            # tf.summary.scalar("loss/g_loss_cos", self.g_loss_cos),
-            # tf.summary.scalar("loss/g_loss_j_cos", self.g_loss_j_cos),
-
-            tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),           
-            tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
-            tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
-            tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
-            tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
 
             tf.summary.scalar("misc/epoch", self.epoch),
             tf.summary.scalar('misc/q', self.batch_manager.q.size()),
 
             tf.summary.histogram("y", self.y),
             tf.summary.histogram("z", self.z),
+
+            tf.summary.scalar("misc/g_lr", self.g_lr),
         ]
 
         if self.use_c:
             summary += [
-                tf.summary.image("G_s", self.G_s),
+                tf.summary.image("G_s", self.G_s[:,::-1]),
             ]
 
-        if self.lr_update == 'freeze':
-            for i in range(num_layers):
-                summary.append(tf.summary.scalar("g_lr/%02d" % i, layers[i]['lr']))
-        else:
+        if 'dg' in self.arch:
             summary += [
-                tf.summary.scalar("misc/g_lr", self.g_lr),
+                tf.summary.scalar("loss/g_loss_real", tf.sqrt(self.g_loss_real)),
+                tf.summary.scalar("loss/d_loss_real", tf.sqrt(self.d_loss_real)),
+                tf.summary.scalar("loss/d_loss_fake", tf.sqrt(self.d_loss_fake)),
             ]
 
         self.summary_op = tf.summary.merge(summary)
-
+        
         summary = [
             tf.summary.image("x", denorm_img(self.x)),
             tf.summary.image("x_vort", denorm_img(self.x_vort)),
-            tf.summary.image('x_div', divergence(self.x*self.batch_manager.x_range)),
         ]
         self.summary_once = tf.summary.merge(summary) # call just once
 
@@ -308,16 +218,12 @@ class Trainer(object):
 
         for i in range(self.c_num):
             zi = np.zeros(shape=z_shape)
-            # if i == self.c_num-1:
-            #     zi = np.zeros(shape=z_shape)
-            # else:
-            #     zi = np.ones(shape=z_shape)*-1
             zi[:,i] = z_varying
             z_samples.append(zi)
 
         # test2: compare to gt
         x, pi, zi_ = self.batch_manager.random_list(self.b_num)
-        x_w = self.get_vort_image(x/127.5-1, is_vel=True)
+        x_w = self.get_vort_image(x/127.5-1)
         x_w = np.concatenate((x_w,x_w,x_w), axis=3)
         x = np.concatenate((x,x_w), axis=0)
         save_image(x, '{}/x_fixed_gt.png'.format(self.model_dir), nrow=self.b_num)
@@ -338,11 +244,10 @@ class Trainer(object):
         
         # train
         for step in trange(self.start_step, self.max_step):
-            if self.lr_update == 'freeze' and step == self.max_steps[0]:
-                self.max_steps.pop(0)
-                self.opts.pop(0)
-                self.g_optim = tf.group(self.opts)
-            self.sess.run(self.g_optim)
+            if 'dg' in self.arch:
+                self.sess.run([self.g_optim, self.d_optim])
+            else:
+                self.sess.run(self.g_optim)
 
             if step % self.log_step == 0 or step == self.max_step-1:
                 ep = step*self.batch_manager.epochs_per_step
@@ -361,721 +266,92 @@ class Trainer(object):
                 if step % self.lr_update_step == self.lr_update_step - 1:
                     self.sess.run(self.g_lr_update)
             else:
-                g_lr = self.sess.run(self.g_lr_update)
-                # print(g_lr)
+                self.sess.run(self.g_lr_update)
 
         # save last checkpoint..
         save_path = os.path.join(self.model_dir, 'model.ckpt')
         self.saver.save(self.sess, save_path, global_step=self.step)
         self.batch_manager.stop_thread()
-    
-    def build_test_model(self, b_num):
-        self.b_num = b_num
-        self.z = tf.placeholder(dtype=tf.float32, shape=[self.b_num, self.c_num])
+
+    def build_test_model(self):
+        # build a model for testing
+        self.z = tf.placeholder(dtype=tf.float32, shape=[self.test_b_num, self.c_num])
         if self.use_c:
             self.G_s, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                      num_conv=self.num_conv, last_k=self.last_k,
-                                      repeat=self.repeat, skip_concat=self.skip_concat,
-                                      act=self.act, reuse=True)
+                                      num_conv=self.num_conv, repeat=self.repeat, reuse=True)
             self.G_ = curl(self.G_s)
         else:
             self.G_, _ = GeneratorBE(self.z, self.filters, self.output_shape,
-                                     num_conv=self.num_conv, last_k=self.last_k,
-                                     repeat=self.repeat, skip_concat=self.skip_concat,
-                                     act=self.act, reuse=True)
-        
-        self.G = denorm_img(self.G_) # for debug
-        # self.G_div_ = divergence(self.G_*self.batch_manager.x_range)
-
-    def test_smoke2(self):
-        # reconstruction test
-        self.test_intv = 200
-        intv = self.test_intv
-
-        # z1 = (0.48 - 0.2) / (0.8-0.2) * 2 - 1
-        z1 = 4.0 / 9.0 * 2 - 1
-        z2 = 2.0 / 9.0 * 2 - 1
-        # print(z1)
-        z_in = np.zeros(shape=[intv, self.c_num])
-        z_varying = np.linspace(-1, 1, num=intv)
-        z_in[:,0] = z1
-        z_in[:,1] = z2
-        z_in[:,2] = z_varying
-
-        G = self.gen_p2(0, 0, z_in)
-
-        out_dir = os.path.join(self.model_dir, 'p2_n%d' % intv)
-        title = '0_0'
-        dump_path = os.path.join(out_dir, title+'.npz')
-        np.savez_compressed(dump_path, v=G)
-
-        from subprocess import call
-        call(["../manta/build_nogui_omp/Release/manta.exe",
-                "./scene/smoke_pos_size.py",
-                "--is_test=True",
-                "--vpath={}".format(dump_path)])
-        return
-
-
-        # interpolation test
-        self.test_intv = 200
-        intv = self.test_intv
-        z_list = []
-
-        z_in = np.zeros(shape=[intv, self.c_num])
-        z_varying = np.linspace(-1, 1, num=intv)
-        z_in[:,0] = z_varying
-        z_in[:,1] = 0
-        z_in[:,2] = 0
-        z_list.append(z_in)
-
-        z_in = np.zeros(shape=[intv, self.c_num])
-        z_varying = np.linspace(-1, 1, num=intv)
-        z_in[:,0] = 0
-        z_in[:,1] = z_varying
-        z_in[:,2] = 0
-        z_list.append(z_in)
-
-        z_in = np.zeros(shape=[intv, self.c_num])
-        z_varying = np.linspace(-1, 1, num=intv)
-        z_in[:,0] = z_varying
-        z_in[:,1] = z_varying
-        z_in[:,2] = 0
-        z_list.append(z_in)
-
-        for i, z_in in enumerate(z_list):
-            self.gen_p2(i, 0, z_in)
-        return
-
-
-        # # extrapolation test
-        # self.test_intv = 100
-        # intv = self.test_intv
-        # z_list = []
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(0.8, 1.6, num=intv) # 30%
-        # z_in[:,0] = z_varying
-        # z_in[:,2] = 0 # -0.6
-        # z_list.append(z_in)
-        # z_org = (z_varying+1)*0.5*(0.8-0.2)+0.2
-        # print(z_org[50], z_org[62], z_org[74], z_org[86], z_org[99])
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(0.8, 1.6, num=intv)
-        # z_in[:,1] = z_varying
-        # z_in[:,2] = 0
-        # z_list.append(z_in)
-        # z_org = (z_varying+1)*0.5*(0.12-0.04)+0.2
-        # print(z_org[50], z_org[62], z_org[74], z_org[86], z_org[99])
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(0.8, 1.6, num=intv)
-        # z_org = (z_varying+1)*0.5*199
-        # print(z_org[50], z_org[62], z_org[74], z_org[86], z_org[99])
-        # z_in[:,2] = z_varying
-        # z_list.append(z_in)
-
-        # for i, z_in in enumerate(z_list):
-        #     self.gen_p2(i, 0, z_in)
-        # return
-
-        p1 = [9, 9.5, 10]
-        p2 = [1, 2]
-        for p1_ in p1:
-            for p2_ in p2:
-                self.gen_p2(p1_, p2_)
-
-    def test_liquid2(self):
-        # interpolation test
-        # self.test_intv = 24
-        intv = self.test_intv
-        z_list = []
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = z_varying
-        # z_in[:,1] = 0
-        # z_in[:,2] = -0.63
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = 0
-        # z_in[:,1] = z_varying
-        # z_in[:,2] = -0.63
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = -1
-        # z_in[:,1] = -1
-        # z_in[:,2] = z_varying
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = 4/9.0*2-1
-        # z_in[:,1] = 4/9.0*2-1
-        # z_in[:,2] = z_varying
-        # z_list.append(z_in)
-
-
-        z_in = np.zeros(shape=[intv, self.c_num])
-        z_varying = np.linspace(-1, 1, num=intv)
-        z_in[:,0] = z_varying
-        z_in[:,1] = -1
-        z_in[:,2] = -1
-        z_list.append(z_in)
-
-        z_in = np.zeros(shape=[intv, self.c_num])
-        z_varying = np.linspace(-1, 1, num=intv)
-        z_in[:,0] = z_varying
-        z_in[:,1] = -1
-        z_in[:,2] = -0.78
-        z_list.append(z_in)
-
-        z_in = np.zeros(shape=[intv, self.c_num])
-        z_varying = np.linspace(-1, 1, num=intv)
-        z_in[:,0] = z_varying
-        z_in[:,1] = -1
-        z_in[:,2] = -0.63
-        z_list.append(z_in)
-
-        z_in = np.zeros(shape=[intv, self.c_num])
-        z_varying = np.linspace(-1, 1, num=intv)
-        z_in[:,0] = z_varying
-        z_in[:,1] = -1
-        z_in[:,2] = -0.3
-        z_list.append(z_in)
-
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = 0.5/9*2-1
-        # z_in[:,1] = -1
-        # z_in[:,2] = z_varying
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = z_varying
-        # z_in[:,1] = z_varying
-        # z_in[:,2] = -1
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = z_varying
-        # z_in[:,1] = z_varying
-        # z_in[:,2] = -0.63
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = z_varying
-        # z_in[:,1] = z_varying
-        # z_in[:,2] = -0.3
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = z_varying
-        # z_in[:,1] = z_varying
-        # z_in[:,2] = 0
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = z_varying
-        # z_in[:,1] = z_varying
-        # z_in[:,2] = 0.5
-        # z_list.append(z_in)
-
-        # z_in = np.zeros(shape=[intv, self.c_num])
-        # z_varying = np.linspace(-1, 1, num=intv)
-        # z_in[:,0] = z_varying
-        # z_in[:,1] = z_varying
-        # z_in[:,2] = 1.0
-        # z_list.append(z_in)
-
-        for i, z_in in enumerate(z_list):
-            self.gen_p2(i, 0, z_in)
-        return
-
-        p1 = [0, 4, 9]
-        p2 = [0, 1, 3]
-        for p1_ in p1:
-            for p2_ in p2:
-                self.gen_p2(p1_, p2_)
-
-    def test_ecmwf(self):        
-        y1 = int(self.batch_manager.y_num[0])
-        y2 = int(self.batch_manager.y_num[1])
-
-        s_factor = 1
-        intv2 = y2*s_factor - 1  # day 9 -> 18, but 17 without last one
-        c2 = np.linspace(-1, 1, num=intv2, endpoint=False)
-
-        days = 31 # January        
-        intv = days*intv2 + 1 # 528=16*33
-
-        z_shape = (intv, self.c_num)
-        z_c = np.zeros(shape=z_shape)
-
-        print(intv2, intv)
-
-        for p1 in range(days):
-            print(p1*intv2,(p1+1)*intv2)
-            c1 = p1/float(y1-1)*2-1
-            z_c[p1*intv2:(p1+1)*intv2,0] = c1
-            z_c[p1*intv2:(p1+1)*intv2,1] = c2
-        z_c[-1,0] = c1
-        z_c[-1,1] = 1
-
-        title = 'jan17'
-        out_dir = os.path.join(self.model_dir, 'p1_n%d' % intv)
-        dump_path = os.path.join(out_dir, title+'.npy')
-        
-        G = self.gen_p1(title, z_c)
-        G = G[:,::-1,:,:]
-        np.save(dump_path, G)
-        # dump_path = os.path.join(out_dir, title+'.npz')
-        # np.savez_compressed(dump_path, v=G)
-
-        # # save ground truth
-        # data_dir = 'data/ecmwf_era_interim/v'
-        # dump_path = os.path.join(out_dir, title+'_gt.npy')
-        # G = []
-        # for d in range(31):
-        #     for t in range(4):
-        #         file_path = os.path.join(data_dir, '%d_%d.npz' % (d, t))
-        #         with np.load(file_path) as data:
-        #             v = data['x']
-        #         G.append(v)
-
-        # G = np.array(G)
-        # print(G.shape)
-        # np.save(dump_path, G)
-
-    def gen_p2(self, p1, p2, z_in=None):
-        if z_in is None:
-            y1 = int(self.batch_manager.y_num[0])
-            y2 = int(self.batch_manager.y_num[1])
-
-            c1 = p1/float(y1-1)*2-1
-            c2 = p2/float(y2-1)*2-1
-
-            intv = self.test_intv
-            z_range = [-1, 1]
-            z_varying = np.linspace(z_range[0], z_range[1], num=intv)
-            z_shape = (intv, self.c_num)
-
-            z_c = np.zeros(shape=z_shape)
-            z_c[:,0] = c1
-            z_c[:,1] = c2
-            z_c[:,-1] = z_varying
-        else:
-            z_c = z_in
-            intv = z_c.shape[0]
-
-        title = str(p1) + '_' + str(p2)
-        out_dir = os.path.join(self.model_dir, 'p2_n%d' % intv)
-        img_dir = os.path.join(out_dir, title)
-        print(img_dir)
-        if not os.path.exists(img_dir):
-            os.makedirs(img_dir)
-
-        assert(intv % self.b_num == 0)
-        niter = int(intv / self.b_num)
-
-        ##################
-        # timing
-        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}) # dry run
-        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
-        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}, options=run_options, run_metadata=run_metadata)
-        from tensorflow.python.client import timeline
-        tl = timeline.Timeline(run_metadata.step_stats)
-        ctf = tl.generate_chrome_trace_format()
-        with open(os.path.join(img_dir, 'timeline.json'), 'w') as f:
-            f.write(ctf)
-        ##################
-        
-        ##################
-        # eval
-        G = None
-        G_div = None
-        for b in range(niter):            
-            G_ = self.sess.run(self.G_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
-            G_, _ = self.batch_manager.denorm(x=G_)
-
-            if G is None:
-                G = G_
-            else:
-                G = np.concatenate((G, G_), axis=0)
-
-        if not self.is_3d:
-            for i in range(intv):
-                x = G[i]
-                img_path = os.path.join(img_dir, '%04d.png' % i)
-                
-                if 'smoke' in img_path: 
-                    vortplot(x, img_path)
-                else:
-                    magplot(x, img_path)
-        return G
-
-    def gen_p1(self, p1, z_in=None):
-        if z_in is None:
-            y1 = int(self.batch_manager.y_num[0])
-            
-            c1 = p1/float(y1-1)*2-1
-
-            intv = self.test_intv
-            z_range = [-1, 1]
-            z_varying = np.linspace(z_range[0], z_range[1], num=intv)
-            z_shape = (intv, self.c_num)
-
-            z_c = np.zeros(shape=z_shape)
-            z_c[:,0] = c1
-            z_c[:,-1] = z_varying
-        else:
-            z_c = z_in
-            intv = z_c.shape[0]
-
-        title = str(p1)
-        out_dir = os.path.join(self.model_dir, 'p1_n%d' % intv)
-        img_dir = os.path.join(out_dir, title)
-        print(img_dir)
-        if not os.path.exists(img_dir):
-            os.makedirs(img_dir)
-
-        assert(intv % self.b_num == 0)
-        niter = int(intv / self.b_num)
-
-        ##################
-        # timing
-        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}) # dry run
-        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        run_metadata = tf.RunMetadata()
-        self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}, options=run_options, run_metadata=run_metadata)
-        from tensorflow.python.client import timeline
-        tl = timeline.Timeline(run_metadata.step_stats)
-        ctf = tl.generate_chrome_trace_format()
-        with open(os.path.join(img_dir, 'timeline.json'), 'w') as f:
-            f.write(ctf)
-        ##################
-        
-        ##################
-        # eval
-        G = None
-        G_div = None
-        for b in range(niter):            
-            G_ = self.sess.run(self.G_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
-            G_, _ = self.batch_manager.denorm(x=G_)
-
-            if G is None:
-                G = G_
-            else:
-                G = np.concatenate((G, G_), axis=0)
-
-        if not self.is_3d:
-            for i in range(intv):
-                x = G[i]
-                img_path = os.path.join(img_dir, '%04d.png' % i)
-                
-                # vortplot(x, img_path)                
-                x = (x+1)*127.5 # [0, 255]
-                b_ch = np.ones([self.res_y,self.res_x,1])*127.5
-                x = np.concatenate((x, b_ch), axis=-1)
-                save_image(x, img_path, single=True)
-
-        return G
+                                     num_conv=self.num_conv, repeat=self.repeat, reuse=True)
 
     def test(self):
-        self.build_test_model(self.test_batch_size)
+        self.build_test_model()
+        
+        p1, p2 = 10, 2
 
-        if 'smoke_pos21_size5_f200' in self.load_path: self.test_smoke2()
-        elif 'liquid' in self.load_path: self.test_liquid2()
-        elif 'ecmwf_era_interim' in self.load_path: self.test_ecmwf()
-        return
+        # eval
+        y1 = int(self.batch_manager.y_num[0])
+        y2 = int(self.batch_manager.y_num[1])
+        y3 = int(self.batch_manager.y_num[2])
 
-        intv = self.test_intv
+        assert(y3 % self.test_b_num == 0)
+        niter = int(y3 / self.test_b_num)
+
+        c1 = p1/float(y1-1)*2-1
+        c2 = p2/float(y2-1)*2-1
+
         z_range = [-1, 1]
-        z_varying = np.linspace(z_range[0], z_range[1], num=intv)
-        z_shape = (intv, self.c_num)
+        z_varying = np.linspace(z_range[0], z_range[1], num=y3)
+        z_shape = (y3, self.c_num)
 
-        from itertools import product
-        for p in range(self.c_num-1,self.c_num):
-            out_dir = os.path.join(self.model_dir, 'p%d_n%d' % (p, intv))
+        z_c = np.zeros(shape=z_shape)
+        z_c[:,0] = c1
+        z_c[:,1] = c2
+        z_c[:,-1] = z_varying
 
-            # c_list = []
-            # p_list = []
-            # for i in range(self.c_num):
-            #     if i != p:
-            #         y_num = int(self.batch_manager.y_num[i])
-            #         if y_num < 5:
-            #             p_ = range(y_num)
-            #         else:
-            #             p_ = [0, 1, int(y_num/2)-1, int(y_num/2), y_num-2, y_num-1]
+        G = []
+        for b in range(niter):
+            G_ = self.sess.run(self.G_, {self.z: z_c[self.test_b_num*b:self.test_b_num*(b+1),:]})
+            G_, _ = self.batch_manager.denorm(x=G_)
+            G.append(G_)
+        G = np.concatenate(G, axis=0)
 
-            #         p_list.append(p_)
-            #         c_list.append([y/float(y_num-1)*2-1 for y in p_])
+        # save
+        title = '%d_%d' % (p1,p2)
+        out_dir = os.path.join(self.model_dir, title)
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
 
-            # dump = (p == self.c_num-1)
-            # for c, ps in zip(product(*c_list), product(*p_list)):
-            #     title = ('%d_'*len(ps) % ps)[:-1]
-            #     c = list(c)
-            #     c.insert(p, z_varying)
+        for i, G_ in enumerate(G):
+            dump_path = os.path.join(out_dir, '%d.npz' % i)
+            np.savez_compressed(dump_path, x=G_)
 
-            #     z_c = np.zeros(shape=z_shape)
-            #     for i in range(self.c_num):
-            #         z_c[:,i] = c[i]
-                
-            #     self.generate_video(title, out_dir, z_c, dump=dump)
-
-            if p == self.c_num-1:
-                # interpolation test
-                # p_list = []
-                p1 = 9.5
-                p2 = 1.5
-                y1 = int(self.batch_manager.y_num[0])
-                y2 = int(self.batch_manager.y_num[1])
-
-                c1 = p1/float(y1-1)*2-1
-                c2 = p2/float(y2-1)*2-1
-
-                z_c = np.zeros(shape=z_shape)
-                z_c[:,0] = c1
-                z_c[:,1] = c2
-                z_c[:,-1] = z_varying
-                title = str(p1) + '_' + str(p2)
-                self.generate_video(title, out_dir, z_c, dump=True)
-                
-    def generate_video(self, title, out_dir, z_c, dump=False):
-        img_dir = os.path.join(out_dir, title)
-        print(img_dir)
-        if not os.path.exists(img_dir):
-            os.makedirs(img_dir)
-
-        if self.data_type == 'stream':
-            img_c_dir = os.path.join(out_dir, title+'c')
-            if not os.path.exists(img_c_dir):
-                os.makedirs(img_c_dir)
-
-        intv = z_c.shape[0]
-        assert(intv % self.b_num == 0)
-        niter = int(intv / self.b_num)
-
-
-        # self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]})
-
-        # run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        # run_metadata = tf.RunMetadata()
-        # self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]}, options=run_options, run_metadata=run_metadata)
-
-        # # Create the Timeline object, and write it to a json
-        # from tensorflow.python.client import timeline
-        # tl = timeline.Timeline(run_metadata.step_stats)
-        # ctf = tl.generate_chrome_trace_format()
-        # with open('timeline.json', 'w') as f:
-        #     f.write(ctf)
-
-        # assert(False)
-        # return
-
-        from datetime import datetime
-        import time
-
-        time_path = os.path.join(out_dir, title+'.txt')
-        f = open(time_path, 'w')
-
-        # for b in range(niter):
-        #     start_time = time.time()
-        #     G = self.sess.run(self.G, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
-        #     duration = time.time() - start_time
-        #     duration_str = '%s: %.3f sec/%d frames (%.3f ms/frame)' % (
-        #         datetime.now(), duration, self.b_num, duration/self.b_num*1000.0)
-        #     print(duration_str)
-        #     f.write(duration_str+'\n')
-        #     if self.data_type == 'stream':
-        #         G_curl = self.sess.run(self.G_curl, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
-
-        #     for i in range(self.b_num):
-        #         x = G[i]
-        #         img_path = os.path.join(img_dir, '%04d.png' % (self.b_num*b + i))
-        #         save_image(x, img_path, single=True)
-
-        #         if self.data_type == 'stream':
-        #             x = G_curl[i]
-        #             img_path = os.path.join(img_c_dir, '%04d.png' % (self.b_num*b + i))
-        #             save_image(x, img_path, single=True)
-        
-        # f.close()
-        # mp4_path = os.path.join(out_dir, title+'.mp4')
-        # fps = int(40 * intv / 200.0)
-        # convert_png2mp4(img_dir, mp4_path, fps, delete_imgdir=False)
-
-        # if self.data_type == 'stream':
-        #     mp4_path = os.path.join(out_dir, title+'c.mp4')
-        #     convert_png2mp4(img_c_dir, mp4_path, fps, delete_imgdir=False)
-
-        # self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]})
-
-        # st = time.time()
-        # self.sess.run(self.G_, {self.z: z_c[:self.b_num,:]})
-        # dt = time.time() - st
-
-        # dt /= self.b_num
-        # print('avg time: %f' % dt)
-        # return
-        
-        G = None
-        G_curl = None
-        G_div = None
-        for b in range(niter):            
-            G_ = self.sess.run(self.G_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
-            G_, _ = self.batch_manager.denorm(x=to_nhwc_numpy(G_))
-
-            if G is None:
-                G = G_
-            else:
-                G = np.concatenate((G, G_), axis=0)
-
-            if self.data_type == 'velocity':
-                G_div_ = self.sess.run(self.G_div_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
-
-                if G_div is None:
-                    G_div = G_div_
-                else:
-                    G_div = np.concatenate((G_div, G_div_), axis=0)
-
-            if self.data_type == 'stream':
-                G_curl_ = self.sess.run(self.G_curl_, {self.z: z_c[self.b_num*b:self.b_num*(b+1),:]})
-                G_curl_ = self.batch_manager.denorm_vel(x=to_nhwc_numpy(G_curl_))
-
-                if G_curl is None:
-                    G_curl = G_curl_
-                else:
-                    G_curl = np.concatenate((G_curl, G_curl_), axis=0)
-
-        print(G_div.shape)
-        vmax = max(np.abs(G_div.min()), G_div.max())
-        print(np.abs(G_div.min()), G_div.max(), vmax)
-        # vmax = 0.29133207 # 10: 10_2
-        vmax = 0.20951328 # 10: 9.5_1.5
-
-        for i in range(intv):
-            x = G[i]
-            # img_path = os.path.join(img_dir, '%04d.png' % i)
-            # save_image(x, img_path, single=True)
-            
-            if self.data_type == 'velocity':
-                img_path = os.path.join(img_dir, 'w%04d.png' % i)
-                xv = vortplot(x, img_path)
-                # img_path = os.path.join(img_dir, 'j%04d.png' % i)
-                # jacoplot(x, img_path)
-
-                img_path = os.path.join(img_dir, 'd%04d.png' % i)
-                divplot(G_div[i,:,:,0], img_path, vmax=vmax)
-
-            elif self.data_type == 'pressure' or\
-                 self.data_type == 'stream':                
-                img_path = os.path.join(img_dir, 'g%04d.png' % i)
-                xg = gradplot(x, img_path)
-
-            # if (title == 'intp_0_3_4' and i == 112) or\
-            #    (title == '5_2_' and i == 96):
-            #     img_path = os.path.join(img_dir, 's%04d.png' % i)
-            #     xs = streamplot(x, img_path)
-            #     # print(xs.shape, x.shape)
-            #     # assert False
-
-            #     import scipy.ndimage
-            #     from PIL import Image
-            #     xv = np.clip(scipy.ndimage.zoom(xv, [5,5,1], order=3), 0, 255)
-            #     xv_ = xv[:,:,:3]/255.0
-            #     xs_ = xs/255.0
-            #     x = np.uint8(xv_*xs_*255)
-            #     im = Image.fromarray(x)
-            #     img_path = os.path.join(img_dir, 'sw%04d.png' % i)
-            #     im.save(img_path)
-            
-        if dump:
-            dump_path = os.path.join(out_dir, title+'.npz')
-            np.savez_compressed(dump_path, v=G)
-
-            if self.data_type == 'stream':
-                dump_path = os.path.join(out_dir, title+'c.npz')
-                np.savez_compressed(dump_path, v=G_curl)
-
+    
     def generate(self, inputs, root_path=None, idx=None):
         generated = []
-        # for i, z_sample in enumerate(inputs):
-        #     generated.append(self.sess.run(self.G_div_, {self.y: z_sample}))
-        
         for i, z_sample in enumerate(inputs):
             generated.append(self.sess.run(self.G, {self.y: z_sample}))
             
         c_concat = np.concatenate(tuple(generated[:-1]), axis=0)
-        # c_concat = ((c_concat/0.5+1)*127.5).astype(np.uint8)
         c_path = os.path.join(root_path, '{}_c.png'.format(idx))
-        save_image(c_concat, c_path, nrow=self.b_num)
+        save_image(c_concat, c_path, nrow=self.b_num, flip=False)
         print("[*] Samples saved: {}".format(c_path))
 
-        if self.data_type == 'velocity':
-            c_vort = self.get_vort_image(c_concat/127.5-1, is_vel=True)
-            c_path = os.path.join(root_path, '{}_cv.png'.format(idx))
-            save_image(c_vort, c_path, nrow=self.b_num)
-            print("[*] Samples saved: {}".format(c_path))
+        c_vort = self.get_vort_image(c_concat/127.5-1)
+        c_path = os.path.join(root_path, '{}_cv.png'.format(idx))
+        save_image(c_vort, c_path, nrow=self.b_num, flip=False)
+        print("[*] Samples saved: {}".format(c_path))
 
         x = generated[-1]
         x_path = os.path.join(root_path, 'x_fixed_{}.png'.format(idx))
-        if self.data_type == 'velocity':
-            x_w = self.get_vort_image(x/127.5-1, is_vel=True)
-            x_w = np.concatenate((x_w,x_w,x_w), axis=3)
-            x = np.concatenate((x,x_w), axis=0)
+        x_w = self.get_vort_image(x/127.5-1)
+        x_w = np.concatenate((x_w,x_w,x_w), axis=3)
+        x = np.concatenate((x,x_w), axis=0)
 
-        save_image(x, x_path, nrow=self.b_num)
+        save_image(x, x_path, nrow=self.b_num, flip=False)
         print("[*] Samples saved: {}".format(x_path))
 
-    def to_vel(self, x):
-        # normalized vel. by str. scale -> re-normalize vel. by velocity scale
-        return self.batch_manager.to_vel(x)
-
-    def get_curl_image(self, x):
-        # x range [-1, 1], NHWC
-        x = curl_np(x)
-        x = self.to_vel(x)
+    def get_vort_image(self, x):
+        x = vort_np(x[:,:,:,:2])
         x_img = np.clip((x+1)*127.5, 0, 255)
-        # print(x_img.shape)
-
-        b_ch = np.ones((x_img.shape[0], self.height, self.width, 1))*127.5
-        x_img = np.concatenate((x_img, b_ch), axis=-1)
-        # print(x_img.shape)
-        # x_img = np.reshape(x_img[:,:,:,0], (self.b_num, self.height, self.width, 1))
-        return x_img
-
-    def get_vort_image(self, x, is_vel=False):
-        if is_vel:
-            x = vort_np(x[:,:,:,:2])
-        else:        
-            # x range [-1, 1], NHWC
-            x = vort_np(curl_np(x))
-            x = self.to_vel(x)
-        x_img = np.clip((x+1)*127.5, 0, 255)
-        # print(x_img.shape)
-        # x_img = np.reshape(x_img[:,:,:,0], (self.b_num, self.height, self.width, 1))
-        return x_img
-
-    def get_grad_image(self, x):
-        x = grad_np(x)
-        xr = [np.abs(x.min()), np.abs(x.max())]
-        x[x<0] /= xr[0]
-        x[x>0] /= xr[1]
-        x_img = np.clip((x+1)*127.5, 0, 255)
-        b_ch = np.ones((x_img.shape[0], self.height, self.width, 1))*127.5
-        x_img = np.concatenate((x_img, b_ch), axis=-1)
-        # x_img = np.uint8(plt.cm.RdBu(x_/255.0)*255)
         return x_img

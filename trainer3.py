@@ -6,105 +6,70 @@ from tqdm import trange
 from datetime import datetime
 import time
 
-from models import *
-from utils import save_image, convert_png2mp4, streamplot, vortplot, gradplot, jacoplot, divplot
+from model import *
+from util import *
 from trainer import Trainer
 
 class Trainer3(Trainer):
     def build_model(self):
         if self.use_c:
             self.G_s, self.G_var = GeneratorBE3(self.y, self.filters, self.output_shape, 
-                                               num_conv=self.num_conv, last_k=self.last_k,
-                                               repeat=self.repeat, skip_concat=self.skip_concat,
-                                               act=self.act)
+                                               num_conv=self.num_conv, repeat=self.repeat)
             _, self.G_ = jacobian3(self.G_s)
         else:
             self.G_, self.G_var = GeneratorBE3(self.y, self.filters, self.output_shape,
-                                              num_conv=self.num_conv, last_k=self.last_k, 
-                                              repeat=self.repeat, skip_concat=self.skip_concat,
-                                              act=self.act)
+                                              num_conv=self.num_conv, repeat=self.repeat)
         self.G = denorm_img3(self.G_) # for debug
 
         self.G_jaco_, self.G_vort_ = jacobian3(self.G_)
         self.G_vort = denorm_img3(self.G_vort_)
-        self.G_div_ = divergence3(self.G_*self.batch_manager.x_range)
         
         # to test
         self.z = tf.random_uniform(shape=[self.b_num, self.c_num], minval=-1.0, maxval=1.0)
         if self.use_c:
             self.G_z_s, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
-                                        num_conv=self.num_conv, last_k=self.last_k,
-                                        repeat=self.repeat, skip_concat=self.skip_concat,
-                                        act=self.act, reuse=True)
+                                        num_conv=self.num_conv, repeat=self.repeat, reuse=True)
             _, self.G_z_ = jacobian3(self.G_z_s)
         else:
             self.G_z_, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k,
-                                       repeat=self.repeat, skip_concat=self.skip_concat,
-                                       act=self.act, reuse=True)
+                                       num_conv=self.num_conv, repeat=self.repeat, reuse=True)
         self.G_z = denorm_img3(self.G_z_) # for debug
 
         self.G_z_jaco_, self.G_z_vort_ = jacobian3(self.G_z_)
         self.G_z_vort = denorm_img3(self.G_z_vort_)
-        self.G_z_div_ = divergence3(self.G_z_*self.batch_manager.x_range)
         
+        if 'dg' in self.arch:
+            # discriminator
+            self.D_x, self.D_var = DiscriminatorPatch3(self.x, self.filters)
+            self.D_G, _ = DiscriminatorPatch3(self.G_, self.filters, reuse=True)
+
         show_all_variables()
 
-        if self.lr_update == 'freeze':
-            num_layers = int(self.G_var[-1].name.split('_')[0].split('/')[1])+1
-            layers = []
-            t0 = 0.5 # 0.5 for linear
-            is_cubic = True
-            t_ = np.linspace(t0, 1, num_layers, dtype=np.float32)
-            if is_cubic: t_ = np.power(t_, 3)
-            self.max_steps = (self.max_step * t_).astype(np.int)
-            a_ = self.lr_max / t_
-            self.g_lr_update = []
-            for i in range(num_layers):
-                g_vars = [var for var in self.G_var if '/{}_'.format(i) in var.name]
-                lr = tf.Variable(a_[i], name='lr%02d' % i)
-                layers.append({
-                    'v': g_vars, 
-                    'lr': lr,
-                })
-                lr_update = tf.assign(lr,
-                    0.5*a_[i]*(tf.cos(tf.cast(self.step, tf.float32)*np.pi/self.max_steps[i])+1))
-                self.g_lr_update.append(lr_update)
-            self.max_steps = self.max_steps.tolist()
+        if self.optimizer == 'adam':
+            optimizer = tf.train.AdamOptimizer
+            g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
+        elif self.optimizer == 'gd':
+            optimizer = tf.train.GradientDescentOptimizer
+            g_optimizer = optimizer(self.g_lr)
         else:
-            if self.optimizer == 'adam':
-                optimizer = tf.train.AdamOptimizer
-                g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
-            elif self.optimizer == 'gd':
-                optimizer = tf.train.GradientDescentOptimizer
-                g_optimizer = optimizer(self.g_lr)
-            else:
-                raise Exception("[!] Invalid opimizer")
+            raise Exception("[!] Invalid opimizer")
 
         # losses
         self.g_loss_l1 = tf.reduce_mean(tf.abs(self.G_ - self.x))
         self.g_loss_j_l1 = tf.reduce_mean(tf.abs(self.G_jaco_ - self.x_jaco))
-
-        self.g_loss_ke = tf.abs(tf.reduce_mean(tf.square(self.G_)) - tf.reduce_mean(tf.square(self.x)))
-        self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
-        self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
-        self.g_loss_z_div = tf.reduce_mean(tf.abs(self.G_z_div_))
-        self.g_loss_z_div_max = tf.reduce_max(tf.abs(self.G_z_div_))
-
         self.g_loss = self.g_loss_l1*self.w1 + self.g_loss_j_l1*self.w2
 
-        if self.lr_update == 'freeze':
-            self.opts = []
-            for i in range(num_layers):
-                grad = tf.gradients(self.g_loss, layers[i]['v'])
-                opt = tf.train.AdamOptimizer(layers[i]['lr'], beta1=self.beta1, beta2=self.beta2)
-                if i == num_layers-1:
-                    self.opts.append(opt.apply_gradients(zip(grad, layers[i]['v']), global_step=self.step))
-                else:
-                    self.opts.append(opt.apply_gradients(zip(grad, layers[i]['v'])))
-            self.g_optim = tf.group(self.opts)
-        else:
-            self.g_optim = g_optimizer.minimize(self.g_loss, global_step=self.step, var_list=self.G_var)
+        if 'dg' in self.arch:
+            self.g_loss_real = tf.reduce_mean(tf.square(self.D_G-1))
+            self.d_loss_fake = tf.reduce_mean(tf.square(self.D_G))
+            self.d_loss_real = tf.reduce_mean(tf.square(self.D_x-1))
+
+            self.g_loss += self.g_loss_real*self.w3
+
+            self.d_loss = self.d_loss_real + self.d_loss_fake
+            self.d_optim = g_optimizer.minimize(self.d_loss, var_list=self.D_var)
+
+        self.g_optim = g_optimizer.minimize(self.g_loss, global_step=self.step, var_list=self.G_var)
         self.epoch = tf.placeholder(tf.float32)
 
         # summary
@@ -133,30 +98,20 @@ class Trainer3(Trainer):
             tf.summary.scalar("loss/g_loss_l1", self.g_loss_l1),
             tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
 
-            tf.summary.scalar("loss/g_loss_ke", self.g_loss_ke),           
-            tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
-            tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
-            tf.summary.scalar("loss/g_loss_z_div", self.g_loss_z_div),
-            tf.summary.scalar("loss/g_loss_z_div_max", self.g_loss_z_div_max),
-
             tf.summary.scalar("misc/epoch", self.epoch),
             tf.summary.scalar('misc/q', self.batch_manager.q.size()),
 
             tf.summary.histogram("y", self.y),
             tf.summary.histogram("z", self.z),
+
+            tf.summary.scalar("misc/g_lr", self.g_lr),
         ]
 
-        # if self.use_c:
-        #     summary += [
-        #         tf.summary.image("G_s", self.G_s),
-        #     ]
-
-        if self.lr_update == 'freeze':
-            for i in range(num_layers):
-                summary.append(tf.summary.scalar("g_lr/%02d" % i, layers[i]['lr']))
-        else:
+        if 'dg' in self.arch:
             summary += [
-                tf.summary.scalar("misc/g_lr", self.g_lr),
+                tf.summary.scalar("loss/g_loss_real", tf.sqrt(self.g_loss_real)),
+                tf.summary.scalar("loss/d_loss_real", tf.sqrt(self.d_loss_real)),
+                tf.summary.scalar("loss/d_loss_fake", tf.sqrt(self.d_loss_fake)),
             ]
 
         self.summary_op = tf.summary.merge(summary)
@@ -165,14 +120,6 @@ class Trainer3(Trainer):
         x = denorm_img3(self.x)
         x_vort = denorm_img3(self.x_vort)
         
-        x_div = divergence3(self.x*self.batch_manager.x_range)
-        x_div_mean = tf.reduce_mean(tf.abs(x_div))
-        x_div_max = tf.reduce_max(tf.abs(x_div))
-        
-        x_shape = int_shape(x_div) # bzyxd
-        c_id = [int(x_shape[1]/2), int(x_shape[3]/2)]
-        x_div_m = tf.squeeze(tf.slice(x_div, [0,c_id[0],0,0,0], [-1,1,-1,-1,-1]), [1])  
-
         summary = [
             # tf.summary.image("x/xy", x['xy']),
             # tf.summary.image("x/zy", x['zy']),
@@ -183,36 +130,27 @@ class Trainer3(Trainer):
             # tf.summary.image("x_vort/zy", x_vort['zy']),
             tf.summary.image("x_vort/xym", x_vort['xym']),
             tf.summary.image("x_vort/zym", x_vort['zym']),
-            
-            tf.summary.scalar('x_div/mean', x_div_mean),
-            tf.summary.scalar('x_div/max', x_div_max),
-          
-            tf.summary.image("x_div/m", x_div_m),
         ]
         self.summary_once = tf.summary.merge(summary) # call just once
 
     def train(self):
         # test1: varying on each axis
         z_range = [-1, 1]
-        z_shape = (self.test_batch_size, self.c_num)
+        z_shape = (self.b_num, self.c_num)
         z_samples = []
-        z_varying = np.linspace(z_range[0], z_range[1], num=self.test_batch_size)
+        z_varying = np.linspace(z_range[0], z_range[1], num=self.b_num)
 
         for i in range(self.c_num):
             zi = np.zeros(shape=z_shape)
-            # if i == self.c_num-1:
-            #     zi = np.zeros(shape=z_shape)
-            # else:
-            #     zi = np.ones(shape=z_shape)*-1
             zi[:,i] = z_varying
             z_samples.append(zi)
 
         # test2: compare to gt
-        gen_list = self.batch_manager.random_list(self.test_batch_size)
+        gen_list = self.batch_manager.random_list(self.b_num)
         x_xy = np.concatenate((gen_list['xym'],gen_list['xym_c']), axis=0)
         x_zy = np.concatenate((gen_list['zym'],gen_list['zym_c']), axis=0)
-        save_image(x_xy, '{}/x_fixed_xym_gt.png'.format(self.model_dir), padding=1, nrow=self.test_batch_size)
-        save_image(x_zy, '{}/x_fixed_zym_gt.png'.format(self.model_dir), padding=1, nrow=self.test_batch_size)
+        save_image(x_xy, '{}/x_fixed_xym_gt.png'.format(self.model_dir), padding=1, nrow=self.b_num)
+        save_image(x_zy, '{}/x_fixed_zym_gt.png'.format(self.model_dir), padding=1, nrow=self.b_num)
         with open('{}/x_fixed_gt.txt'.format(self.model_dir), 'w') as f:
             f.write(str(gen_list['p']) + '\n')
             f.write(str(gen_list['z']))
@@ -229,11 +167,10 @@ class Trainer3(Trainer):
         
         # train
         for step in trange(self.start_step, self.max_step):
-            if self.lr_update == 'freeze' and step == self.max_steps[0]:
-                self.max_steps.pop(0)
-                self.opts.pop(0)
-                self.g_optim = tf.group(self.opts)
-            self.sess.run(self.g_optim)
+            if 'dg' in self.arch:
+                self.sess.run([self.g_optim, self.d_optim])
+            else:
+                self.sess.run(self.g_optim)
 
             if step % self.log_step == 0 or step == self.max_step-1:
                 ep = step*self.batch_manager.epochs_per_step
@@ -252,275 +189,24 @@ class Trainer3(Trainer):
                 if step % self.lr_update_step == self.lr_update_step - 1:
                     self.sess.run(self.g_lr_update)
             else:
-                g_lr = self.sess.run(self.g_lr_update)
-                # print(g_lr)
+                self.sess.run(self.g_lr_update)
 
         # save last checkpoint..
         save_path = os.path.join(self.model_dir, 'model.ckpt')
         self.saver.save(self.sess, save_path, global_step=self.step)
         self.batch_manager.stop_thread()
-    
-    def build_test_model(self, b_num):
-        self.zt = tf.placeholder(dtype=tf.float32, shape=[b_num, self.c_num])
+
+    def build_test_model(self):
+        # build a model for testing
+        self.z = tf.placeholder(dtype=tf.float32, shape=[self.test_b_num, self.c_num])
         if self.use_c:
-            self.Gt_s, _ = GeneratorBE3(self.zt, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k,
-                                       repeat=self.repeat, skip_concat=self.skip_concat,
-                                       act=self.act, reuse=True)
-            _, self.Gt_ = jacobian3(self.Gt_s)
+            self.G_s, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
+                                      num_conv=self.num_conv, repeat=self.repeat, reuse=True)
+            self.G_ = curl(self.G_s)
         else:
-            self.Gt_, _ = GeneratorBE3(self.zt, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, last_k=self.last_k,
-                                       repeat=self.repeat, skip_concat=self.skip_concat,
-                                       act=self.act, reuse=True)
-        self.Gt = denorm_img3(self.Gt_) # for debug
-
-        _, self.Gt_vort_ = jacobian3(self.Gt_)
-        self.Gt_vort = denorm_img3(self.Gt_vort_)
-
-    def test(self):
-        self.build_test_model(self.test_batch_size)
-        
-        self.b_num = self.test_batch_size
-        self.z = self.zt
-        self.G_ = self.Gt_
-        self.G = self.Gt
-
-        if 'smoke3_vel5_buo3_f250' in self.load_path: self.test_smokegun()
-        elif 'smoke3_obs11_buo4_f150' in self.load_path: self.test_smokeobs()
-        elif 'smoke3_res5_96_f150' in self.load_path: self.test_upres()
-        elif 'liquid3_d5_r10_f150' in self.load_path:
-            if self.test_slowmo: self.test_liquiddrop_slowmo()
-            else: self.test_liquiddrop()
-        elif 'liquid3_mid_uni_vis4_f150' in self.load_path:
-            if self.test_slowmo: self.test_liquidvis_slowmo()
-            else: self.test_liquidvis()
-
-    def test_smokegun(self):
-        p_list = [
-            [0,0], [0,1], [0,2],
-            [2,0], [2,1], [2,2],
-            [4,0], [4,1], [4,2],
-            [0,1.5], # buo 0, 1-1.5-2
-            [3,2], [3.5,2], # vel 3-3.5-4, 2
-        ]
-
-        for p12 in p_list:
-            print(p12)
-            p1_, p2_ = p12[0], p12[1]
-            out_dir = os.path.join(self.model_dir, 'p2_n%d' % self.test_intv)
-            title = str(p1_) + '_' + str(p2_)
-            dump_path = os.path.join(out_dir, title+'.npz')
-            
-            G = self.gen_p2(p1_, p2_)
-            G = G[:,:,::-1,:,:]
-            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
-            np.savez_compressed(dump_path, v=G)
-
-            from subprocess import call
-            call(["../manta/build_nogui_vdb/Release/manta.exe",
-                    "./scene/smoke3_vel_buo.py",
-                    "--is_test=True",
-                    "--vpath={}".format(dump_path)])
-
-    def test_smokeobs(self):
-        p2 = 2
-        p_list = [
-            [0,p2], [2,p2], [5,p2], [8,p2], [10,p2],
-            [4,p2], [4.5,p2], # 4-4.5-5
-        ]
-
-        for p12 in p_list:
-            print(p12)            
-            p1_, p2_ = p12[0], p12[1]
-            out_dir = os.path.join(self.model_dir, 'p2_n%d' % self.test_intv)
-            title = str(p1_) + '_' + str(p2_)
-            dump_path = os.path.join(out_dir, title+'.npz')
-            
-            G = self.gen_p2(p1_, p2_)
-            G = G[:,:,::-1,:,:]
-            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
-            np.savez_compressed(dump_path, v=G)
-
-            from subprocess import call
-            call(["../manta/build_nogui_vdb/Release/manta.exe",
-                    "./scene/smoke3_obs_buo.py",
-                    "--is_test=True",
-                    "--vpath={}".format(dump_path)])
-
-    def test_upres(self):
-        p_list = np.linspace(0, 4, num=9) # intv: 0.5
-        for p in p_list:
-            if p == int(p): p = int(p) # 0.0 -> 0
-            print(p)
-            out_dir = os.path.join(self.model_dir, 'p1_n%d' % self.test_intv)
-            title = str(p)
-            dump_path = os.path.join(out_dir, title+'.npz')
-            
-            G = self.gen_p1(p)
-            G = G[:,:,::-1,:,:]
-            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
-            np.savez_compressed(dump_path, v=G)
-
-            from subprocess import call
-            call(["../manta/build_nogui_vdb/Release/manta.exe",
-                    "./scene/smoke3_upres.py",
-                    "--is_test=True",
-                    "--vpath={}".format(dump_path)])
-
-    def test_liquiddrop(self):
-        p_list = [
-            [0,0], [4,0],
-            [0,5], [4,5],
-            [0.5,0.5], [1,1], # 0,0 - 0.5,0.5 - 1,1
-        ]
-
-        for p12 in p_list:
-            print(p12)            
-            p1_, p2_ = p12[0], p12[1]
-            out_dir = os.path.join(self.model_dir, 'p2_n%d' % self.test_intv)
-            title = str(p1_) + '_' + str(p2_)
-            dump_path = os.path.join(out_dir, title+'.npz')
-            
-            G = self.gen_p2(p1_, p2_)
-            G = G[:,:,::-1,:,:]
-            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
-            np.savez_compressed(dump_path, v=G)
-
-            from subprocess import call
-            call(["../manta/build_nogui_omp/Release/manta.exe",
-                    "./scene/liquid3_d_r.py",
-                    "--is_test=True",
-                    "--is_slow=False",
-                    "--vpath={}".format(dump_path)])
-
-            call(["../manta/build_nogui_omp/Release/manta.exe",
-                    "./scene/particle_meshing.py",
-                    "--log_dir={}".format(os.path.join(out_dir, title)),
-                    "--resolution_x={}".format(self.res_x),
-                    "--resolution_y={}".format(self.res_y),
-                    "--resolution_z={}".format(self.res_z)])
-
-    def test_liquiddrop_slowmo(self):
-        pv1, pv2 = 24, 29
-        intv2 = (pv2-pv1+1)*10 # x10
-        intv = self.test_intv - (pv2-pv1+1) + intv2
-        yn = self.test_intv # orignal last frames
-        cv0 = (pv1-1)/(yn-1)*2 - 1
-        cv1 = pv1/(yn-1)*2 - 1
-        cv2 = pv2/(yn-1)*2 - 1
-        cv3 = (pv2+1)/(yn-1)*2 - 1
-        z_range1 = [-1, cv0]
-        z_range2 = [cv1, cv2]
-        z_range3 = [cv3, 1]
-        z_varying1 = np.linspace(z_range1[0], z_range1[1], num=pv1)
-        z_varying2 = np.linspace(z_range2[0], z_range2[1], num=intv2)
-        z_varying3 = np.linspace(z_range3[0], z_range3[1], num=yn-pv2-1)
-        z_varying = np.concatenate((z_varying1,z_varying2,z_varying3), axis=0)
-        z_in = np.zeros(shape=[intv, self.c_num])
-
-        p1_, p2_ = 0, 0
-        z_in[:,0] = -1
-        z_in[:,1] = -1
-        z_in[:,-1] = z_varying
-
-        out_dir = os.path.join(self.model_dir, 'p2_n%d' % intv)
-        title = str(p1_) + '_' + str(p1_)
-        dump_path = os.path.join(out_dir, title+'.npz')
-            
-        G = self.gen_p2(p1_, p2_, z_in)
-        G = G[:,:,::-1,:,:]
-        G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
-        np.savez_compressed(dump_path, v=G)
-
-        from subprocess import call
-        call(["../manta/build_nogui_omp/Release/manta.exe",
-                "./scene/liquid3_d_r.py",
-                "--is_test=True",
-                "--is_slow=True",
-                "--vpath={}".format(dump_path)])
-
-        call(["../manta/build_nogui_omp/Release/manta.exe",
-                "./scene/particle_meshing.py",
-                "--log_dir={}".format(os.path.join(out_dir, title)),
-                "--resolution_x={}".format(self.res_x),
-                "--resolution_y={}".format(self.res_y),
-                "--resolution_z={}".format(self.res_z)])
-
-    def test_liquidvis(self):
-        p_list = np.linspace(0, 3, num=7) # intv: 0.5
-        for p in p_list:
-            if p == int(p): p = int(p) # 0.0 -> 0
-            print(p)
-            out_dir = os.path.join(self.model_dir, 'p1_n%d' % self.test_intv)
-            title = str(p)
-            dump_path = os.path.join(out_dir, title+'.npz')
-            
-            G = self.gen_p1(p)
-            G = G[:,:,::-1,:,:]
-            G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
-            np.savez_compressed(dump_path, v=G)
-
-            from subprocess import call
-            call(["../manta/build_nogui_omp/Release/manta.exe",
-                    "./scene/liquid3_vis.py",
-                    "--is_test=True",
-                    "--is_slow=False",
-                    "--vpath={}".format(dump_path)])
-
-            call(["../manta/build_nogui_omp/Release/manta.exe",
-                    "./scene/particle_meshing.py",
-                    "--log_dir={}".format(os.path.join(out_dir, title)),
-                    "--resolution_x={}".format(self.res_x),
-                    "--resolution_y={}".format(self.res_y),
-                    "--resolution_z={}".format(self.res_z)])
-
-    def test_liquidvis_slowmo(self):        
-        pv1, pv2 = 80, 85
-        intv2 = (pv2-pv1+1)*10 # x10
-        intv = self.test_intv - (pv2-pv1+1) + intv2
-        yn = self.test_intv # orignal last frames
-        cv0 = (pv1-1)/(yn-1)*2 - 1
-        cv1 = pv1/(yn-1)*2 - 1
-        cv2 = pv2/(yn-1)*2 - 1
-        cv3 = (pv2+1)/(yn-1)*2 - 1
-        z_range1 = [-1, cv0]
-        z_range2 = [cv1, cv2]
-        z_range3 = [cv3, 1]
-        z_varying1 = np.linspace(z_range1[0], z_range1[1], num=pv1)
-        z_varying2 = np.linspace(z_range2[0], z_range2[1], num=intv2)
-        z_varying3 = np.linspace(z_range3[0], z_range3[1], num=yn-pv2-1)
-        z_varying = np.concatenate((z_varying1,z_varying2,z_varying3), axis=0)
-
-        z_in = np.zeros(shape=[intv, self.c_num])
-
-        p = 0
-        z_in[:,0] = -1
-        z_in[:,-1] = z_varying
-
-        out_dir = os.path.join(self.model_dir, 'p1_n%d' % intv)
-        title = str(p)
-        dump_path = os.path.join(out_dir, title+'.npz')
-        
-        G = self.gen_p1(p, z_in)
-        G = G[:,:,::-1,:,:]
-        G = G.transpose([0,2,3,1,4]) # bzyxd -> byxzd
-        np.savez_compressed(dump_path, v=G)
-
-        from subprocess import call
-        call(["../manta/build_nogui_omp/Release/manta.exe",
-                "./scene/liquid3_vis.py",
-                "--is_test=True",
-                "--is_slow=True",
-                "--vpath={}".format(dump_path)])
-
-        call(["../manta/build_nogui_omp/Release/manta.exe",
-                "./scene/particle_meshing.py",
-                "--log_dir={}".format(os.path.join(out_dir, title)),
-                "--resolution_x={}".format(self.res_x),
-                "--resolution_y={}".format(self.res_y),
-                "--resolution_z={}".format(self.res_z)])
-
+            self.G_, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
+                                     num_conv=self.num_conv, repeat=self.repeat, reuse=True)        
+    
     def generate(self, inputs, root_path=None, idx=None):
         # xy_list = []
         # zy_list = []
@@ -532,16 +218,16 @@ class Trainer3(Trainer):
         xymw_list = []
         zymw_list = []
 
-        for i, z_sample in enumerate(inputs):
+        for _, z_sample in enumerate(inputs):
             xym, zym = self.sess.run( # xy, zy, 
-                [self.Gt['xym'], self.Gt['zym']], {self.zt: z_sample}) # self.Gt['xy'], self.Gt['zy'], 
+                [self.G['xym'], self.G['zym']], {self.z: z_sample}) # self.G['xy'], self.G['zy'], 
             # xy_list.append(xy)
             # zy_list.append(zy)
             xym_list.append(xym)
             zym_list.append(zym)
 
             xym, zym = self.sess.run( # xy, zy, 
-                [self.Gt_vort['xym'], self.Gt_vort['zym']], {self.zt: z_sample}) # self.Gt_vort['xy'], self.Gt_vort['zy'], 
+                [self.G_vort['xym'], self.G_vort['zym']], {self.z: z_sample}) # self.G_vort['xy'], self.G_vort['zy'], 
             # xyw_list.append(xy)
             # zyw_list.append(zy)
             xymw_list.append(xym)
@@ -554,15 +240,15 @@ class Trainer3(Trainer):
                                   [xym_list, zym_list]): # xy_list, zy_list, 
             c_concat = np.concatenate(tuple(generated[:-2]), axis=0)
             c_path = os.path.join(root_path, '{}_{}.png'.format(idx,tag))
-            save_image(c_concat, c_path, nrow=self.test_batch_size, padding=1)
+            save_image(c_concat, c_path, nrow=self.b_num, padding=1)
             print("[*] Samples saved: {}".format(c_path))
 
         gen_random = np.concatenate(tuple(xym_list[-2:]), axis=0)
         x_xy_path = os.path.join(root_path, 'x_fixed_xym_{}.png'.format(idx))
-        save_image(gen_random, x_xy_path, nrow=self.test_batch_size, padding=1)
+        save_image(gen_random, x_xy_path, nrow=self.b_num, padding=1)
         print("[*] Samples saved: {}".format(x_xy_path))
 
         gen_random = np.concatenate(tuple(zym_list[-2:]), axis=0)
         x_zy_path = os.path.join(root_path, 'x_fixed_zym_{}.png'.format(idx))
-        save_image(gen_random, x_zy_path, nrow=self.test_batch_size, padding=1)
+        save_image(gen_random, x_zy_path, nrow=self.b_num, padding=1)
         print("[*] Samples saved: {}".format(x_zy_path))

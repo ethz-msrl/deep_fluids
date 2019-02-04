@@ -151,15 +151,17 @@ def remove_channels(x, data_format='NHWC'):
         x, _ = tf.split(x, [3, -1], axis=3)
     return x
 
-def denorm_img(norm, data_format='NHWC'):
+def denorm_img(norm, flip=True, data_format='NHWC'):
     _, _, _, c = get_conv_shape(norm, data_format)
     if c == 2:
         norm = add_channels(norm, num_ch=1, data_format=data_format)
     elif c > 3:
         norm = remove_channels(norm, data_format=data_format)
-    return tf.cast(tf.clip_by_value(to_nhwc((norm + 1)*127.5, data_format), 0, 255), tf.uint8)
+    img = tf.cast(tf.clip_by_value(to_nhwc((norm + 1)*127.5, data_format), 0, 255), tf.uint8)
+    if flip: img = img[:,::-1]
+    return img
 
-def plane_view(x, xy_plane=True, project=True):
+def plane_view(x, flip=True, xy_plane=True, project=True):
     x_shape = int_shape(x) # bzyxd
     c_id = [int(x_shape[1]/2), int(x_shape[3]/2)]
     
@@ -177,7 +179,8 @@ def plane_view(x, xy_plane=True, project=True):
                     [3]), [0,2,1,3])
 
     x = tf.cast(tf.clip_by_value((x + 1)*127.5, 0, 255), tf.uint8)
-    return x    
+    if flip: x = x[:,::-1]
+    return x
 
 def denorm_img3(x):
     xy = plane_view(x, xy_plane=True, project=True)
@@ -201,43 +204,6 @@ def reshape(x, h, w, c, data_format='NHWC'):
         x = tf.reshape(x, [-1, h, w, c])
     return x
 
-def jacobian3(x):
-    # x: bzyxd
-    dudx = x[:,:,:,1:,0] - x[:,:,:,:-1,0]
-    dvdx = x[:,:,:,1:,1] - x[:,:,:,:-1,1]
-    dwdx = x[:,:,:,1:,2] - x[:,:,:,:-1,2]
-    dudy = x[:,:,:-1,:,0] - x[:,:,1:,:,0] # y fliped
-    dvdy = x[:,:,:-1,:,1] - x[:,:,1:,:,1] # y fliped
-    dwdy = x[:,:,:-1,:,2] - x[:,:,1:,:,2] # y fliped
-    dudz = x[:,1:,:,:,0] - x[:,:-1,:,:,0]
-    dvdz = x[:,1:,:,:,1] - x[:,:-1,:,:,1]
-    dwdz = x[:,1:,:,:,2] - x[:,:-1,:,:,2]
-
-    # u = dwdy[:,:-1,:,:-1] - dvdz[:,:,1:,:-1]
-    # v = dudz[:,:,1:,:-1] - dwdx[:,:-1,1:,:]
-    # w = dvdx[:,:-1,1:,:] - dudy[:,:-1,:,:-1]
-
-    dudx = tf.concat((dudx, tf.expand_dims(dudx[:,:,:,-1], axis=3)), axis=3)
-    dvdx = tf.concat((dvdx, tf.expand_dims(dvdx[:,:,:,-1], axis=3)), axis=3)
-    dwdx = tf.concat((dwdx, tf.expand_dims(dwdx[:,:,:,-1], axis=3)), axis=3)
-
-    dudy = tf.concat((tf.expand_dims(dudy[:,:,0,:], axis=2), dudy), axis=2)
-    dvdy = tf.concat((tf.expand_dims(dvdy[:,:,0,:], axis=2), dvdy), axis=2)
-    dwdy = tf.concat((tf.expand_dims(dwdy[:,:,0,:], axis=2), dwdy), axis=2)
-
-    dudz = tf.concat((dudz, tf.expand_dims(dudz[:,-1,:,:], axis=1)), axis=1)
-    dvdz = tf.concat((dvdz, tf.expand_dims(dvdz[:,-1,:,:], axis=1)), axis=1)
-    dwdz = tf.concat((dwdz, tf.expand_dims(dwdz[:,-1,:,:], axis=1)), axis=1)
-
-    u = dwdy - dvdz
-    v = dudz - dwdx
-    w = dvdx - dudy
-    
-    j = tf.stack([dudx,dudy,dudz,dvdx,dvdy,dvdz,dwdx,dwdy,dwdz], axis=-1)
-    c = tf.stack([u,v,w], axis=-1)
-    
-    return j, c
-    
 def jacobian(x, data_format='NHCW'):
     if data_format == 'NCHW':
         x = nchw_to_nhwc(x)
@@ -260,62 +226,93 @@ def jacobian(x, data_format='NHCW'):
         w = nhwc_to_nchw(w)
     return j, w
 
-def curl(x, data_format='NHWC'):
-    if data_format == 'NCHW':
-        x = nchw_to_nhwc(x)
+def jacobian3(x):
+    # x: bzyxd
+    dudx = x[:,:,:,1:,0] - x[:,:,:,:-1,0]
+    dvdx = x[:,:,:,1:,1] - x[:,:,:,:-1,1]
+    dwdx = x[:,:,:,1:,2] - x[:,:,:,:-1,2]
+    dudy = x[:,:,1:,:,0] - x[:,:,:-1,:,0]
+    dvdy = x[:,:,1:,:,1] - x[:,:,:-1,:,1]
+    dwdy = x[:,:,1:,:,2] - x[:,:,:-1,:,2]
+    dudz = x[:,1:,:,:,0] - x[:,:-1,:,:,0]
+    dvdz = x[:,1:,:,:,1] - x[:,:-1,:,:,1]
+    dwdz = x[:,1:,:,:,2] - x[:,:-1,:,:,2]
 
-    u = x[:,:-1,:,0] - x[:,1:,:,0] # ds/dy, horizontally flipped
+    # u = dwdy[:,:-1,:,:-1] - dvdz[:,:,1:,:-1]
+    # v = dudz[:,:,1:,:-1] - dwdx[:,:-1,1:,:]
+    # w = dvdx[:,:-1,1:,:] - dudy[:,:-1,:,:-1]
+
+    dudx = tf.concat((dudx, tf.expand_dims(dudx[:,:,:,-1], axis=3)), axis=3)
+    dvdx = tf.concat((dvdx, tf.expand_dims(dvdx[:,:,:,-1], axis=3)), axis=3)
+    dwdx = tf.concat((dwdx, tf.expand_dims(dwdx[:,:,:,-1], axis=3)), axis=3)
+
+    dudy = tf.concat((dudy, tf.expand_dims(dudy[:,:,-1,:], axis=2)), axis=2)
+    dvdy = tf.concat((dvdy, tf.expand_dims(dvdy[:,:,-1,:], axis=2)), axis=2)
+    dwdy = tf.concat((dwdy, tf.expand_dims(dwdy[:,:,-1,:], axis=2)), axis=2)
+
+    dudz = tf.concat((dudz, tf.expand_dims(dudz[:,-1,:,:], axis=1)), axis=1)
+    dvdz = tf.concat((dvdz, tf.expand_dims(dvdz[:,-1,:,:], axis=1)), axis=1)
+    dwdz = tf.concat((dwdz, tf.expand_dims(dwdz[:,-1,:,:], axis=1)), axis=1)
+
+    u = dwdy - dvdz
+    v = dudz - dwdx
+    w = dvdx - dudy
+    
+    j = tf.stack([dudx,dudy,dudz,dvdx,dvdy,dvdz,dwdx,dwdy,dwdz], axis=-1)
+    c = tf.stack([u,v,w], axis=-1)
+    
+    return j, c
+    
+def curl(x, data_format='NHWC'):
+    if data_format == 'NCHW': x = nchw_to_nhwc(x)
+
+    u = x[:,1:,:,0] - x[:,:-1,:,0] # ds/dy
     v = x[:,:,:-1,0] - x[:,:,1:,0] # -ds/dx,
-    u = tf.concat([tf.expand_dims(u[:,0,:], axis=1), u], axis=1)
-    v = tf.concat([v,tf.expand_dims(v[:,:,-1], axis=2)], axis=2)
+    u = tf.concat([u, tf.expand_dims(u[:,-1,:], axis=1)], axis=1)
+    v = tf.concat([v, tf.expand_dims(v[:,:,-1], axis=2)], axis=2)
     c = tf.stack([u,v], axis=-1)
 
-    if data_format == 'NCHW':
-        c = nhwc_to_nchw(c)
+    if data_format == 'NCHW': c = nhwc_to_nchw(c)
     return c
-
-def divergence3(x):
-    dudx = x[:,:-1,1:,1:,0] - x[:,:-1,1:,:-1,0]
-    dvdy = x[:,:-1,:-1,:-1,1] - x[:,:-1,1:,:-1,1] # horizontally flipped
-    dwdz = x[:,1:,1:,:-1,2] - x[:,:-1,1:,:-1,2]
-    return tf.expand_dims(dudx + dvdy + dwdz, axis=-1)
     
 def divergence(x, data_format='NHWC'):
-    if data_format == 'NCHW':
-        x = nchw_to_nhwc(x)
+    if data_format == 'NCHW': x = nchw_to_nhwc(x)
 
-    dudx = x[:,1:,1:,0] - x[:,1:,:-1,0]
-    dvdy = x[:,:-1,:-1,1] - x[:,1:,:-1,1] # horizontally flipped
+    dudx = x[:,:-1,1:,0] - x[:,:-1,:-1,0]
+    dvdy = x[:,1:,:-1,1] - x[:,:-1,:-1,1]
     div = tf.expand_dims(dudx + dvdy, axis=-1)
 
-    if data_format == 'NCHW':
-        div = nhwc_to_nchw(div)
+    if data_format == 'NCHW': div = nhwc_to_nchw(div)
     return div
+
+def divergence3(x):
+    dudx = x[:,:-1,:-1,1:,0] - x[:,:-1,:-1,:-1,0]
+    dvdy = x[:,:-1,1:,:-1,1] - x[:,:-1,:-1,:-1,1]
+    dwdz = x[:,1:,:-1,:-1,2] - x[:,:-1,:-1,:-1,2]
+    return tf.expand_dims(dudx + dvdy + dwdz, axis=-1)
 
 def pgrad(x, data_format):
     # pressure gradient
-    if data_format == 'NCHW':
-        x = nchw_to_nhwc(x)
+    if data_format == 'NCHW': x = nchw_to_nhwc(x)
 
     u = x[:,:,1:,0] - x[:,:,:-1,0] # dp/dx,
-    v = x[:,:-1,:,0] - x[:,1:,:,0] # dp/dy, horizontally flipped
+    v = x[:,1:,:,0] - x[:,:-1,:,0] # dp/dy
     u = tf.concat([u,tf.expand_dims(u[:,:,-1], axis=2)], axis=2)
     v = tf.concat([v,tf.expand_dims(v[:,-1,:], axis=1)], axis=1)
     g = tf.stack([u,v], axis=-1)
 
-    if data_format == 'NCHW':
-        g = nhwc_to_nchw(g)
+    if data_format == 'NCHW': g = nhwc_to_nchw(g)
     return g
 
 def vort_np(x):
     dvdx = x[:,:,1:,1] - x[:,:,:-1,1]
     dvdx = np.concatenate([dvdx,np.expand_dims(dvdx[:,:,-1], axis=2)], axis=2)
-    dudy = x[:,:-1,:,0] - x[:,1:,:,0] # horizontally flipped
+    dudy = x[:,1:,:,0] - x[:,:-1,:,0]
     dudy = np.concatenate([dudy,np.expand_dims(dudy[:,-1,:], axis=1)], axis=1)
     return np.expand_dims(dvdx - dudy, axis=-1)
 
 def curl_np(x):
-    u = x[:,:-1,:,0] - x[:,1:,:,0] # ds/dy, horizontally flipped
+    u = x[:,1:,:,0] - x[:,:-1,:,0] # ds/dy
     u = np.concatenate([u,np.expand_dims(u[:,-1,:], axis=1)], axis=1)
     v = x[:,:,:-1,0] - x[:,:,1:,0] # -ds/dx
     v = np.concatenate([v,np.expand_dims(v[:,:,-1], axis=2)], axis=2)
@@ -323,12 +320,11 @@ def curl_np(x):
 
 def grad_np(x):
     u = x[:,:,1:,0] - x[:,:,:-1,0] # dp/dx,
-    v = x[:,:-1,:,0] - x[:,1:,:,0] # dp/dy, horizontally flipped
+    v = x[:,1:,:,0] - x[:,:-1,:,0] # dp/dy
     u = np.concatenate([u,np.expand_dims(u[:,:,-1], axis=2)], axis=2)
     v = np.concatenate([v,np.expand_dims(v[:,-1,:], axis=1)], axis=1)
     return np.stack([u,v], axis=-1)
 
-# 3d
 def plane_view_np(x, xy_plane=True, project=True):
     x_shape = x.shape # zyxd
     c_id = [int(x_shape[0]/2), int(x_shape[2]/2)]
@@ -352,9 +348,9 @@ def jacobian_np3(x):
     dudx = x[:,:,:,1:,0] - x[:,:,:,:-1,0]
     dvdx = x[:,:,:,1:,1] - x[:,:,:,:-1,1]
     dwdx = x[:,:,:,1:,2] - x[:,:,:,:-1,2]
-    dudy = x[:,:,:-1,:,0] - x[:,:,1:,:,0] # y fliped
-    dvdy = x[:,:,:-1,:,1] - x[:,:,1:,:,1] # y fliped
-    dwdy = x[:,:,:-1,:,2] - x[:,:,1:,:,2] # y fliped
+    dudy = x[:,:,1:,:,0] - x[:,:,:-1,:,0]
+    dvdy = x[:,:,1:,:,1] - x[:,:,:-1,:,1]
+    dwdy = x[:,:,1:,:,2] - x[:,:,:-1,:,2]
     dudz = x[:,1:,:,:,0] - x[:,:-1,:,:,0]
     dvdz = x[:,1:,:,:,1] - x[:,:-1,:,:,1]
     dwdz = x[:,1:,:,:,2] - x[:,:-1,:,:,2]
@@ -363,9 +359,9 @@ def jacobian_np3(x):
     dvdx = np.concatenate((dvdx, np.expand_dims(dvdx[:,:,:,-1], axis=3)), axis=3)
     dwdx = np.concatenate((dwdx, np.expand_dims(dwdx[:,:,:,-1], axis=3)), axis=3)
 
-    dudy = np.concatenate((np.expand_dims(dudy[:,:,0,:], axis=2), dudy), axis=2)
-    dvdy = np.concatenate((np.expand_dims(dvdy[:,:,0,:], axis=2), dvdy), axis=2)
-    dwdy = np.concatenate((np.expand_dims(dwdy[:,:,0,:], axis=2), dwdy), axis=2)
+    dudy = np.concatenate((dudy, np.expand_dims(dudy[:,:,-1,:], axis=2)), axis=2)
+    dvdy = np.concatenate((dvdy, np.expand_dims(dvdy[:,:,-1,:], axis=2)), axis=2)
+    dwdy = np.concatenate((dwdy, np.expand_dims(dwdy[:,:,-1,:], axis=2)), axis=2)
 
     dudz = np.concatenate((dudz, np.expand_dims(dudz[:,-1,:,:], axis=1)), axis=1)
     dvdz = np.concatenate((dvdz, np.expand_dims(dvdz[:,-1,:,:], axis=1)), axis=1)
@@ -377,15 +373,11 @@ def jacobian_np3(x):
     
     j = np.stack([dudx,dudy,dudz,dvdx,dvdy,dvdz,dwdx,dwdy,dwdz], axis=-1)
     c = np.stack([u,v,w], axis=-1)
-    
     return j, c
-
-
 
 def show_all_variables():
     model_vars = tf.trainable_variables()
     slim.model_analyzer.analyze_vars(model_vars, print_info=True)
-
 
 # https://stackoverflow.com/questions/39051451/ssim-ms-ssim-for-tensorflow
 # https://github.com/tensorflow/models/blob/master/compression/image_encoder/msssim.py

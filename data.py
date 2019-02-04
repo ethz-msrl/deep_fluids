@@ -11,9 +11,6 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 
-from itertools import product
-from utils import streamplot, vortplot, convert_png2mp4
-
 from ops import *
 
 class BatchManager(object):
@@ -148,33 +145,10 @@ class BatchManager(object):
     def batch(self):
         return self.q.dequeue_many(self.batch_size)
 
-    def sample(self, num):
-        idx = self.rng.choice(len(self.paths), num).tolist()
-        return [self.paths[i] for i in idx]
-
-    def norm(self, x=None, y=None):
-        # original range -> output range [-1, 1]
-        if x is not None:
-            if self.data_type[0] == 'd':
-                x = x*2 - 1
-            else:    
-                x /= self.x_range
-            # x = (x-r[0]) / (r[1]-r[0]) * 2 - 1 # rescaling
-        
-        if y is not None:
-            for i, ri in enumerate(self.y_range):
-                y[:,i] = (y[:,i]-ri[0]) / (ri[1]-ri[0]) * 2 - 1
-
-        return x, y
-
     def denorm(self, x=None, y=None):
         # input range [-1, 1] -> original range
         if x is not None:
-            if self.data_type[0] == 'd':
-                x = (x+1) * 0.5
-            else:
-                x *= self.x_range
-            # x = (x+1) * 0.5 * (r[1]-r[0]) + r[0] # [r0, r1]
+            x *= self.x_range
 
         if y is not None:
             r = self.y_range
@@ -182,13 +156,29 @@ class BatchManager(object):
                 y[:,i] = (y[:,i]+1) * 0.5 * (ri[1]-ri[0]) + ri[0]
         return x, y
 
-    def to_vel(self, x):
-        return x*self.to_v_ratio
+    # def sample(self, num):
+    #     idx = self.rng.choice(len(self.paths), num).tolist()
+    #     return [self.paths[i] for i in idx]
 
-    def denorm_vel(self, x):
-        x *= self.v_range
-        # x = (x+1) * 0.5 * (r[1]-r[0]) + r[0] # [r0, r1]
-        return x
+    # def norm(self, x=None, y=None):
+    #     # original range -> output range [-1, 1]
+    #     if x is not None:
+    #         if self.data_type[0] == 'd':
+    #             x = x*2 - 1
+    #         else:    
+    #             x /= self.x_range
+    #         # x = (x-r[0]) / (r[1]-r[0]) * 2 - 1 # rescaling
+        
+    #     if y is not None:
+    #         for i, ri in enumerate(self.y_range):
+    #             y[:,i] = (y[:,i]-ri[0]) / (ri[1]-ri[0]) * 2 - 1
+
+    #     return x, y
+
+    # def denorm_vel(self, x):
+    #     x *= self.v_range
+    #     # x = (x+1) * 0.5 * (r[1]-r[0]) + r[0] # [r0, r1]
+    #     return x
 
     def list_from_p(self, p_list):
         path_format = os.path.join(self.root, self.data_type[0], self.args['path_format'])
@@ -263,74 +253,31 @@ class BatchManager(object):
             sample['xym'].append(xym)
             sample['zym'].append(zym)
 
-            if self.data_type == 'velocity':
-                # vorticity
-                x_c = np.expand_dims(x, axis=0)
-                _, x_c = jacobian_np3(x_c)
-                x_c = self.to_vel(x_c)
+            # vorticity
+            x_c = np.expand_dims(x, axis=0)
+            _, x_c = jacobian_np3(x_c)
 
-                x_c = np.squeeze(x_c, axis=0)
-                xy_c = plane_view_np(x_c, xy_plane=True, project=True)
-                zy_c = plane_view_np(x_c, xy_plane=False, project=True)
-                xym_c = plane_view_np(x_c, xy_plane=True, project=False)
-                zym_c = plane_view_np(x_c, xy_plane=False, project=False)
+            x_c = np.squeeze(x_c, axis=0)
+            xy_c = plane_view_np(x_c, xy_plane=True, project=True)
+            zy_c = plane_view_np(x_c, xy_plane=False, project=True)
+            xym_c = plane_view_np(x_c, xy_plane=True, project=False)
+            zym_c = plane_view_np(x_c, xy_plane=False, project=False)
 
-                sample['xy_c'].append(xy_c)
-                sample['zy_c'].append(zy_c)
-                sample['xym_c'].append(xym_c)
-                sample['zym_c'].append(zym_c)
-
-            elif self.data_type == 'stream':
-                # velocity
-                x_c = np.expand_dims(x, axis=0)
-                _, x_c = jacobian_np3(x_c)
-                x_c = self.to_vel(x_c)
-
-                # vorticity
-                _, x_w = jacobian_np3(x_c)
-
-                x_c = np.squeeze(x_c, axis=0)
-                xy_c = plane_view_np(x_c, xy_plane=True, project=True)
-                zy_c = plane_view_np(x_c, xy_plane=False, project=True)
-                xym_c = plane_view_np(x_c, xy_plane=True, project=False)
-                zym_c = plane_view_np(x_c, xy_plane=False, project=False)
-
-                sample['xy_c'].append(xy_c)
-                sample['zy_c'].append(zy_c)
-                sample['xym_c'].append(xym_c)
-                sample['zym_c'].append(zym_c)
-
-                x_w = np.squeeze(x_w, axis=0)
-                xy_w = plane_view_np(x_w, xy_plane=True, project=True)
-                zy_w = plane_view_np(x_w, xy_plane=False, project=True)
-                xym_w = plane_view_np(x_w, xy_plane=True, project=False)
-                zym_w = plane_view_np(x_w, xy_plane=False, project=False)
-
-                sample['xy_w'].append(xy_w)
-                sample['zy_w'].append(zy_w)
-                sample['xym_w'].append(xym_w)
-                sample['zym_w'].append(zym_w)
+            sample['xy_c'].append(xy_c)
+            sample['zy_c'].append(zy_c)
+            sample['xym_c'].append(xym_c)
+            sample['zym_c'].append(zym_c)
+            
 
         sample['xy'] = np.array(sample['xy'])
         sample['zy'] = np.array(sample['zy'])
         sample['xym'] = np.array(sample['xym'])
         sample['zym'] = np.array(sample['zym'])
 
-        if self.data_type == 'velocity':
-            sample['xy_c'] = np.array(sample['xy_c'])
-            sample['zy_c'] = np.array(sample['zy_c'])
-            sample['xym_c'] = np.array(sample['xym_c'])
-            sample['zym_c'] = np.array(sample['zym_c'])
-
-        elif self.data_type == 'stream':
-            sample['xy_c'] = np.array(sample['xy_c'])
-            sample['zy_c'] = np.array(sample['zy_c'])
-            sample['xym_c'] = np.array(sample['xym_c'])
-            sample['zym_c'] = np.array(sample['zym_c'])
-            sample['xy_w'] = np.array(sample['xy_w'])
-            sample['zy_w'] = np.array(sample['zy_w'])
-            sample['xym_w'] = np.array(sample['xym_w'])
-            sample['zym_w'] = np.array(sample['zym_w'])
+        sample['xy_c'] = np.array(sample['xy_c'])
+        sample['zy_c'] = np.array(sample['zy_c'])
+        sample['xym_c'] = np.array(sample['xym_c'])
+        sample['zym_c'] = np.array(sample['zym_c'])
 
         return sample
 
@@ -346,16 +293,6 @@ def preprocess(file_path, data_type, x_range, y_range):
         x = data['x']
         y = data['y']
 
-    # horizontal flip
-    if x.ndim == 4:
-        # 3d
-        # yxzd -> zyxd
-        if data_type[0] == 'v' or data_type[0] == 's':
-            x = x.transpose([2,0,1,3])
-        x = x[:,::-1,:,:]
-    else:
-        x = x[::-1,:,:]
-
     # normalize
     if data_type[0] == 'd':
         x = x*2 - 1
@@ -366,36 +303,39 @@ def preprocess(file_path, data_type, x_range, y_range):
         y[i] = (y[i]-ri[0]) / (ri[1]-ri[0]) * 2 - 1
     return x, y
 
-def test2d(config):
+def test3d(config):
     prepare_dirs_and_logger(config)
     tf.set_random_seed(config.random_seed)
 
     batch_manager = BatchManager(config)
 
-    # test: visualization
-    x, _ = preprocess('data/ecmwf_era_interim/v/0_0.npz', 'velocity', batch_manager.x_range, batch_manager.y_range)
-    # x, _ = preprocess('data/smoke_pos10_f100/v/4_50.npz', 'velocity', batch_manager.x_range, batch_manager.y_range)
-    # x, _ = batch_manager.denorm(x=x)
-    # x = x[::-1,:]
+    # batch test
+    sess_config = tf.ConfigProto()
+    sess_config.gpu_options.allow_growth = True
+    sess_config.allow_soft_placement = True
+    sess_config.log_device_placement = False
+    sess = tf.Session(config=sess_config)
 
-    # dudy = x[1:,:-1,0] - x[:-1,:-1,0]
-    # dvdy = x[1:,:-1,1] - x[:-1,:-1,1]
-    # dudx = x[:-1,1:,0] - x[:-1,:-1,0]
-    # dvdx = x[:-1,1:,1] - x[:-1,:-1,1]
-    
-    # x_div = dudx + dvdy
-    # x_vor = dvdx - dudy
-    # print(x.min(), x.max(), x_div.min(), x_div.max(), x_vor.min(), x_vor.max())    
-    
-    # fig, ax = plt.subplots(2,2)
-    # ax[0,0].imshow(x[:,:,0], cmap='viridis', origin='lower')
-    # ax[0,1].imshow(x[:,:,1], cmap='viridis', origin='lower')
-    # ax[1,0].imshow(x_div, cmap='viridis', origin='lower')
-    # # ax[1,1].streamplot(X, Y, u, v, color=color, cmap=plt.cm.inferno, linewidth=lw,
-    # #     density=2.0, arrowstyle='->', arrowsize=1.0)
-    # # ax[1,1].set_aspect('equal')
-    # ax[1,1].imshow(x_vor, cmap='RdBu', origin='lower')
-    # plt.show()
+    batch_manager.start_thread(sess)
+    x, y = batch_manager.batch()
+    x_ = x.eval(session=sess)    
+    batch_manager.stop_thread()    
+
+    # random pick from parameter space
+    sample = batch_manager.random_list(config.batch_size)    
+    save_image(sample['xy'], '{}/xy.png'.format(config.model_dir))
+    save_image(sample['zy'], '{}/zy.png'.format(config.model_dir))
+    save_image(sample['xym'], '{}/xym.png'.format(config.model_dir))
+    save_image(sample['zym'], '{}/zym.png'.format(config.model_dir))
+    with open('{}/sample.txt'.format(config.model_dir), 'w') as f:
+        f.write(str(sample['p']))
+        f.write(str(sample['z']))
+
+def test2d(config):
+    prepare_dirs_and_logger(config)
+    tf.set_random_seed(config.random_seed)
+
+    batch_manager = BatchManager(config)
 
     # thread test
     sess_config = tf.ConfigProto()
@@ -411,133 +351,25 @@ def test2d(config):
     batch_manager.stop_thread()
 
     x_ = (x_+1)*127.5 # [0, 255]
-    if config.data_type == 'velocity':
+    if 'velocity' in config.data_type:
         b_ch = np.ones([config.batch_size,config.res_y,config.res_x,1])*127.5
         x_ = np.concatenate((x_, b_ch), axis=-1)
 
     save_image(x_, '{}/x_fixed.png'.format(config.model_dir))
 
-    # plt.figure()
-    # plt.subplot(121)
-    # plt.imshow(x_[0,:,:,0], cmap='viridis', vmin=0, vmax=255) # viridis, gray
-    # plt.subplot(122)
-    # plt.imshow(x_[0,:,:,1], cmap='viridis', vmin=0, vmax=255)
-    # plt.show()
-
-
     # random pick from parameter space
-    x, pi, zi = batch_manager.random_list(8)
+    x, pi, zi = batch_manager.random_list(config.batch_size)
     save_image(x, '{}/x.png'.format(config.model_dir))
     with open('{}/x_p.txt'.format(config.model_dir), 'w') as f:
         f.write(str(pi))
         f.write(str(zi))
 
-
-    # save ground truth
-    out_dir = 'data/ecmwf_era_interim/'
-    title = 'jan17'
-    data_dir = 'data/ecmwf_era_interim/v'
-    dump_path = os.path.join(out_dir, title+'_gt.npy')
-    G = []
-    for d in range(31):
-        for t in range(4):
-            file_path = os.path.join(data_dir, '%d_%d.npz' % (d, t))
-            with np.load(file_path) as data:
-                v = data['x']
-            G.append(v)
-
-    G = np.array(G)
-    print(G.shape)
-    np.save(dump_path, G)
-
-    # ecmwf_era_interim
-    p_list = []
-    for p2 in range(31):
-        for p3 in range(8): # because of overlap between 24 and next 0
-            p_list.append([p2, p3])
-    p_list.append([p2, 8])
-
-    f_list = batch_manager.list_from_p(p_list)
-    
-    img_dir = os.path.join(config.data_path, 'img')
-    if not os.path.exists(img_dir):
-        os.makedirs(img_dir)
-
-    for i, file_path in enumerate(f_list):
-        x, _ = preprocess(file_path, batch_manager.data_type, batch_manager.x_range, batch_manager.y_range)
-        # x = x[::-1,:] # flip...
-        img_path = os.path.join(img_dir, '%05d.png' % i)
-        # vortplot(x, img_path)
-        x = (x+1)*127.5 # [0, 255]
-        b_ch = np.ones([config.res_y,config.res_x,1])*127.5
-        x = np.concatenate((x, b_ch), axis=-1)
-        save_image(x, img_path, single=True)
-
-    mp4_path = os.path.join(config.data_path, '2017_01.mp4')
-    fps = 10
-    convert_png2mp4(img_dir, mp4_path, fps)
-
-def test3d(config):
-    prepare_dirs_and_logger(config)
-    tf.set_random_seed(config.random_seed)
-
-    batch_manager = BatchManager(config)
-    x, _ = preprocess('data/smoke3_vel5_buo3_f250/v/3_2_150.npz', 'velocity', batch_manager.x_range, batch_manager.y_range)
-
-    # batch test
-    sess_config = tf.ConfigProto()
-    sess_config.gpu_options.allow_growth = True
-    sess_config.allow_soft_placement = True
-    sess_config.log_device_placement = False
-    sess = tf.Session(config=sess_config)
-
-    batch_manager.start_thread(sess)
-    x, y = batch_manager.batch()
-    x_ = x.eval(session=sess)    
-    batch_manager.stop_thread()    
-
-    # random pick from parameter space
-    sample = batch_manager.random_list(8)    
-    save_image(sample['xy'], '{}/xy.png'.format(config.model_dir))
-    save_image(sample['zy'], '{}/zy.png'.format(config.model_dir))
-    save_image(sample['xym'], '{}/xym.png'.format(config.model_dir))
-    save_image(sample['zym'], '{}/zym.png'.format(config.model_dir))
-    with open('{}/sample.txt'.format(config.model_dir), 'w') as f:
-        f.write(str(sample['p']))
-        f.write(str(sample['z']))
-
-    if batch_manager.data_type == 'stream':
-        save_image(sample['xy_c'], '{}/xy_c.png'.format(config.model_dir))
-        save_image(sample['zy_c'], '{}/zy_c.png'.format(config.model_dir))
-        save_image(sample['xym_c'], '{}/xym_c.png'.format(config.model_dir))
-        save_image(sample['zym_c'], '{}/zym_c.png'.format(config.model_dir))        
-        save_image(sample['xy_w'], '{}/xy_w.png'.format(config.model_dir))
-        save_image(sample['zy_w'], '{}/zy_w.png'.format(config.model_dir))
-        save_image(sample['xym_w'], '{}/xym_w.png'.format(config.model_dir))
-        save_image(sample['zym_w'], '{}/zym_w.png'.format(config.model_dir))
-
-
 if __name__ == "__main__":
     from config import get_config
-    from utils import prepare_dirs_and_logger, save_config, save_image
+    from util import prepare_dirs_and_logger, save_config, save_image
     config, unparsed = get_config()
 
-    #############
-    # test: 2d
-    setattr(config, 'is_3d', False)
-    # setattr(config, 'dataset', 'smoke_pos21_size5_f200')
-    # setattr(config, 'res_x', 96)
-    # setattr(config, 'res_y', 128)
-    # setattr(config, 'dataset', 'liquid_pos10_size4_f200')
-    # setattr(config, 'res_x', 128)
-    # setattr(config, 'res_y', 64)
-    setattr(config, 'dataset', 'ecmwf_era_interim')
-    setattr(config, 'res_x', 192)
-    setattr(config, 'res_y', 96)
-    for data_type in ['velocity']:
-        setattr(config, 'data_type', data_type)
-        test2d(config)
-    #############
+    test2d(config)
 
     # ##############
     # # test: 3d
@@ -547,7 +379,5 @@ if __name__ == "__main__":
     # setattr(config, 'res_y', 64)
     # setattr(config, 'res_z', 32)
     # setattr(config, 'batch_size', 4)
-    # for data_type in ['velocity']:
-    #     setattr(config, 'data_type', data_type)
-    #     test3d(config)
+    # test3d(config)
     # ##############

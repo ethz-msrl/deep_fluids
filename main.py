@@ -1,11 +1,12 @@
 import numpy as np
 import tensorflow as tf
 
-from trainer import Trainer
-from trainer3 import Trainer3
 from data import BatchManager
 from config import get_config
-from utils import prepare_dirs_and_logger, save_config
+from util import prepare_dirs_and_logger, save_config
+
+from trainer import Trainer
+from trainer3 import Trainer3
 
 def main(config):
     prepare_dirs_and_logger(config)
