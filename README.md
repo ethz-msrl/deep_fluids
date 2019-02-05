@@ -23,7 +23,7 @@ After installing anaconda, run `pip install --ignore-installed --upgrade tensorf
 
 ## Usage
 
-Run a script for dataset generation using mantaflow below. For instance,
+Run a script for the dataset generation using mantaflow. For instance,
 
     $ ..\manta\build\Release\manta.exe ./smoke_pos_size.py
 
@@ -34,6 +34,8 @@ To train:
 To test:
     
     $ python main.py --is_train=False --load_path=MODEL_DIR
+
+Please take a closer look at `run.sh` (or `run.bat`) for each dataset.
 
 ## Results
 

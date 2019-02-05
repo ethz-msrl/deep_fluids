@@ -24,7 +24,8 @@ net_arg.add_argument('--use_curl', type=str2bool, default=True)
 net_arg.add_argument('--w1', type=float, default=1.0, help='weight for l1')
 net_arg.add_argument('--w2', type=float, default=1.0, help='weight for jacobian')
 net_arg.add_argument('--w3', type=float, default=0.075, help='weight for discriminator')
-net_arg.add_argument('--arch', type=str, default='de', choices=['de', 'dg', 'ae', 'nn'])
+net_arg.add_argument('--arch', type=str, default='de', choices=['de', 'dg', 'ae', 'nn'],
+                     help='dec, dec+discriminator, auto-encoder, multi-layer perceptron')
 
 # Data
 data_arg = add_argument_group('Data')

@@ -362,9 +362,9 @@ if __name__ == "__main__":
 
     # ##############
     # # test: 2d    
-    # setattr(config, 'dataset', 'smoke_pos21_size5_f200')
-    # setattr(config, 'res_x', 96)
-    # setattr(config, 'res_y', 128)
+    setattr(config, 'dataset', 'smoke_pos21_size5_f200')
+    setattr(config, 'res_x', 96)
+    setattr(config, 'res_y', 128)
 
     # setattr(config, 'dataset', 'liquid_pos10_size4_f200')
     # setattr(config, 'res_x', 128)
@@ -380,12 +380,12 @@ if __name__ == "__main__":
     # setattr(config, 'res_y', 128)
     # setattr(config, 'arch', 'ae')
 
-    # test2d(config)
+    test2d(config)
 
     ##############
-    # test: 3d
-    setattr(config, 'is_3d', True)
-    setattr(config, 'batch_size', 4)
+    # # test: 3d
+    # setattr(config, 'is_3d', True)
+    # setattr(config, 'batch_size', 4)
 
     # setattr(config, 'dataset', 'smoke3_vel5_buo3_f250')
     # setattr(config, 'res_x', 112)
@@ -402,11 +402,11 @@ if __name__ == "__main__":
     # setattr(config, 'res_y', 48)
     # setattr(config, 'res_z', 96)
 
-    setattr(config, 'dataset', 'smoke3_rot_f500')
-    setattr(config, 'res_x', 48)
-    setattr(config, 'res_y', 72)
-    setattr(config, 'res_z', 48)
-    setattr(config, 'arch', 'ae')
+    # setattr(config, 'dataset', 'smoke3_rot_f500')
+    # setattr(config, 'res_x', 48)
+    # setattr(config, 'res_y', 72)
+    # setattr(config, 'res_z', 48)
+    # setattr(config, 'arch', 'ae')
 
     # setattr(config, 'dataset', 'smoke3_mov200_f400')
     # setattr(config, 'res_x', 48)
@@ -414,5 +414,5 @@ if __name__ == "__main__":
     # setattr(config, 'res_z', 48)
     # setattr(config, 'arch', 'ae')
 
-    test3d(config)
+    # test3d(config)
     # ##############

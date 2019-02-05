@@ -33,7 +33,7 @@
 # ../manta/build/manta ./scene/smoke3_rot.py --log_dir=data/smoke_rot_f500 --resolution_x=96 --resolution_y=128 --resolution_z=1 --open_bound=xXyY --num_dof=1
 
 ### smoke3_rot, 3D
-../manta/build/manta ./scene/smoke3_rot.py --log_dir=data/smoke3_rot_f500 --resolution_x=48 --resolution_y=72 --resolution_z=48
+# ../manta/build/manta ./scene/smoke3_rot.py --log_dir=data/smoke3_rot_f500 --resolution_x=48 --resolution_y=72 --resolution_z=48
 
 ### smoke3_mov, 2D
 # ../manta/build/manta ./scene/smoke3_mov.py --log_dir=data/smoke_mov200_f400 --resolution_x=96 --resolution_y=128 --resolution_z=1 --open_bound=xXyY --num_dof=1
