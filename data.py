@@ -70,7 +70,7 @@ class BatchManager(object):
         self.enqueue = self.q.enqueue([self.x, self.y])
         self.num_threads = np.amin([config.num_worker, multiprocessing.cpu_count(), self.batch_size])
 
-        r = np.loadtxt(os.path.join(self.root, self.data_type[0]+'_range.txt'))
+        r = [float(self.args['min_b']), float(self.args['max_b'])]
         self.x_range = max(abs(r[0]), abs(r[1]))
         self.y_range = []
         self.y_num = []
@@ -86,10 +86,9 @@ class BatchManager(object):
                 self.y_range.append([p_min, p_max])
         else:
             for i in range(self.c_num):
-                p_name = self.args['p%d' % i]
-                p_min = float(self.args['min_{}'.format(p_name)])
-                p_max = float(self.args['max_{}'.format(p_name)])
-                p_num = int(self.args['num_{}'.format(p_name)])
+                p_min = float(self.args['min_c'])
+                p_max = float(self.args['max_c'])
+                p_num = int(self.args['num_param'])
                 self.y_range.append([p_min, p_max])
                 self.y_num.append(p_num)
 
@@ -174,6 +173,9 @@ class BatchManager(object):
             filelist.append(path_format % tuple(p))
         return filelist
 
+    def sample(self, num):
+        return self.rng.choice(self.paths, num)
+
     def random_list2d(self, num):
         xs = []
         pis = []
@@ -219,16 +221,13 @@ class BatchManager(object):
             'z': [],
         }
         
-        for _ in range(num):
-            p = []
-            for y_max in self.y_num:
-                p.append(self.rng.randint(y_max))
-            sample['p'].append(p)
-            z = [(pi/float(self.y_num[i]-1))*2-1 for i, pi in enumerate(p)] # [-1,1]
-            sample['z'].append(z)
-
-            file_path = self.list_from_p([p])[0]
+        file_list = self.sample(num)
+        for i in range(num):
+            file_path = file_list[i]
             x, y = preprocess(file_path, self.data_type, self.x_range, self.y_range)
+            sample['z'].append(y)
+            _, p = self.denorm(y)
+            sample['p'].append(p)
 
             xy = plane_view_np(x, xy_plane=True, project=True)
             zy = plane_view_np(x, xy_plane=False, project=True)
@@ -360,59 +359,15 @@ if __name__ == "__main__":
     from util import prepare_dirs_and_logger, save_config, save_image
     config, unparsed = get_config()
 
-    # ##############
-    # # test: 2d    
-    setattr(config, 'dataset', 'smoke_pos21_size5_f200')
-    setattr(config, 'res_x', 96)
-    setattr(config, 'res_y', 128)
-
-    # setattr(config, 'dataset', 'liquid_pos10_size4_f200')
-    # setattr(config, 'res_x', 128)
-    # setattr(config, 'res_y', 64)
-
-    # setattr(config, 'dataset', 'smoke_rot_f500')
-    # setattr(config, 'res_x', 96)
-    # setattr(config, 'res_y', 128)
-    # setattr(config, 'arch', 'ae')
-
-    # setattr(config, 'dataset', 'smoke_mov200_f400')
-    # setattr(config, 'res_x', 96)
-    # setattr(config, 'res_y', 128)
-    # setattr(config, 'arch', 'ae')
-
-    test2d(config)
-
     ##############
-    # # test: 3d
-    # setattr(config, 'is_3d', True)
-    # setattr(config, 'batch_size', 4)
+    # test: 3d
+    setattr(config, 'is_3d', True)
+    setattr(config, 'batch_size', 8)
 
-    # setattr(config, 'dataset', 'smoke3_vel5_buo3_f250')
-    # setattr(config, 'res_x', 112)
-    # setattr(config, 'res_y', 64)
-    # setattr(config, 'res_z', 32)
+    setattr(config, 'dataset', 'cmag_dataset')
+    setattr(config, 'res_x', 32)
+    setattr(config, 'res_y', 32)
+    setattr(config, 'res_z', 32)
 
-    # setattr(config, 'dataset', 'smoke3_obs11_buo4_f150')
-    # setattr(config, 'res_x', 64)
-    # setattr(config, 'res_y', 96)
-    # setattr(config, 'res_z', 64)
-
-    # setattr(config, 'dataset', 'liquid3_d5_r10_f150')
-    # setattr(config, 'res_x', 96)
-    # setattr(config, 'res_y', 48)
-    # setattr(config, 'res_z', 96)
-
-    # setattr(config, 'dataset', 'smoke3_rot_f500')
-    # setattr(config, 'res_x', 48)
-    # setattr(config, 'res_y', 72)
-    # setattr(config, 'res_z', 48)
-    # setattr(config, 'arch', 'ae')
-
-    # setattr(config, 'dataset', 'smoke3_mov200_f400')
-    # setattr(config, 'res_x', 48)
-    # setattr(config, 'res_y', 72)
-    # setattr(config, 'res_z', 48)
-    # setattr(config, 'arch', 'ae')
-
-    # test3d(config)
+    test3d(config)
     # ##############

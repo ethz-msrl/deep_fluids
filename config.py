@@ -13,14 +13,14 @@ def add_argument_group(name):
 
 # Network
 net_arg = add_argument_group('Network')
-net_arg.add_argument('--is_3d', type=str2bool, default=False)
-net_arg.add_argument('--res_x', type=int, default=96)
-net_arg.add_argument('--res_y', type=int, default=128)
+net_arg.add_argument('--is_3d', type=str2bool, default=True)
+net_arg.add_argument('--res_x', type=int, default=32)
+net_arg.add_argument('--res_y', type=int, default=32)
 net_arg.add_argument('--res_z', type=int, default=32)
 net_arg.add_argument('--repeat', type=int, default=0)
 net_arg.add_argument('--filters', type=int, default=128)
 net_arg.add_argument('--num_conv', type=int, default=4)
-net_arg.add_argument('--use_curl', type=str2bool, default=True)
+net_arg.add_argument('--use_curl', type=str2bool, default=False)
 net_arg.add_argument('--w1', type=float, default=1.0, help='weight for l1')
 net_arg.add_argument('--w2', type=float, default=1.0, help='weight for jacobian')
 net_arg.add_argument('--w3', type=float, default=0.075, help='weight for discriminator')
@@ -29,17 +29,17 @@ net_arg.add_argument('--arch', type=str, default='de', choices=['de', 'dg', 'ae'
 
 # Data
 data_arg = add_argument_group('Data')
-data_arg.add_argument('--dataset', type=str, default='smoke_pos21_size5_f200')
+data_arg.add_argument('--dataset', type=str, default='cmag_dataset')
 data_arg.add_argument('--batch_size', type=int, default=8)
-data_arg.add_argument('--test_batch_size', type=int, default=100)
-data_arg.add_argument('--num_worker', type=int, default=2)
+data_arg.add_argument('--test_batch_size', type=int, default=8)
+data_arg.add_argument('--num_worker', type=int, default=1)
 data_arg.add_argument('--data_type', type=str, default='velocity')
 
 # Training / test parameters
 train_arg = add_argument_group('Training')
 train_arg.add_argument('--is_train', type=str2bool, default=True)
 train_arg.add_argument('--start_step', type=int, default=0)
-train_arg.add_argument('--max_epoch', type=int, default=100)
+train_arg.add_argument('--max_epoch', type=int, default=200)
 train_arg.add_argument('--lr_update_step', type=int, default=120000)
 train_arg.add_argument('--lr_max', type=float, default=0.0001)
 train_arg.add_argument('--lr_min', type=float, default=0.0000025)
