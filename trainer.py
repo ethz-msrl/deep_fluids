@@ -134,12 +134,12 @@ class Trainer(object):
 
         if 'dg' in self.arch:
             # discriminator
-            # self.D_x, self.D_var = DiscriminatorPatch(self.x, self.filters)
-            D_in = tf.concat([self.x, self.x_jaco], axis=-1)
-            self.D_x, self.D_var = DiscriminatorPatch(D_in, self.filters)
-            # self.D_G, _ = DiscriminatorPatch(self.G_, self.filters, reuse=True)
-            G_in = tf.concat([self.G_, self.G_jaco_], axis=-1)
-            self.D_G, _ = DiscriminatorPatch(G_in, self.filters, reuse=True)
+            self.D_x, self.D_var = DiscriminatorPatch(self.x, self.filters)
+            # D_in = tf.concat([self.x, self.x_jaco], axis=-1)
+            # self.D_x, self.D_var = DiscriminatorPatch(D_in, self.filters)
+            self.D_G, _ = DiscriminatorPatch(self.G_, self.filters, reuse=True)
+            # G_in = tf.concat([self.G_, self.G_jaco_], axis=-1)
+            # self.D_G, _ = DiscriminatorPatch(G_in, self.filters, reuse=True)
         
         show_all_variables()
 

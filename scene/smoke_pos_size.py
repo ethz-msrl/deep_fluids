@@ -65,7 +65,6 @@ def advect():
 	res_x = args.resolution_x
 	res_y = args.resolution_y
 	gs = vec3(res_x, res_y, 1)
-	buoyancy = vec3(0,args.buoyancy,0)
 
 	s = Solver(name='main', gridSize=gs, dim=2)
 	s.timestep = args.time_step
@@ -103,7 +102,7 @@ def advect():
 		copyGridToArrayReal(density, d_)
 
 		img_path = os.path.join(img_dir, '%04d.png' % t)
-		d_img = d_[::-1,:]*255
+		d_img = d_[::-1]*255
 		d_img = np.stack((d_img,d_img,d_img), axis=-1).astype(np.uint8)
 		d_img = Image.fromarray(d_img)
 		d_img.save(img_path)

@@ -53,7 +53,11 @@ class BatchManager(object):
             feature_dim = [self.res_z, self.res_y, self.res_x, self.depth]
         else:
             feature_dim = [self.res_y, self.res_x, self.depth]
-        label_dim = [self.c_num]
+        
+        if 'ae' in config.arch:
+            label_dim = [int(self.args['num_dof']), int(self.args['num_frames'])]
+        else:
+            label_dim = [self.c_num]
 
         if self.is_3d:
             min_after_dequeue = 500
@@ -70,17 +74,24 @@ class BatchManager(object):
         self.x_range = max(abs(r[0]), abs(r[1]))
         self.y_range = []
         self.y_num = []
-        for i in range(self.c_num):
-            p_name = self.args['p%d' % i]
-            p_min = float(self.args['min_{}'.format(p_name)])
-            p_max = float(self.args['max_{}'.format(p_name)])
-            p_num = int(self.args['num_{}'.format(p_name)])
-            self.y_range.append([p_min, p_max])
-            self.y_num.append(p_num)
 
-        vr = np.loadtxt(os.path.join(self.root, 'v_range.txt'))
-        self.v_range = max(abs(vr[0]), abs(vr[1]))
-        self.to_v_ratio = self.x_range / self.v_range
+        if 'ae' in config.arch:
+            for i in range(self.c_num):
+                p_name = self.args['p%d' % i]
+                p_min = float(self.args['min_{}'.format(p_name)])
+                p_max = float(self.args['max_{}'.format(p_name)])
+                p_num = int(self.args['num_{}'.format(p_name)])
+                self.y_num.append(p_num)
+            for i in range(label_dim[0]):
+                self.y_range.append([p_min, p_max])
+        else:
+            for i in range(self.c_num):
+                p_name = self.args['p%d' % i]
+                p_min = float(self.args['min_{}'.format(p_name)])
+                p_max = float(self.args['max_{}'.format(p_name)])
+                p_num = int(self.args['num_{}'.format(p_name)])
+                self.y_range.append([p_min, p_max])
+                self.y_num.append(p_num)
 
     def __del__(self):
         try:
@@ -155,30 +166,6 @@ class BatchManager(object):
             for i, ri in enumerate(self.y_range):
                 y[:,i] = (y[:,i]+1) * 0.5 * (ri[1]-ri[0]) + ri[0]
         return x, y
-
-    # def sample(self, num):
-    #     idx = self.rng.choice(len(self.paths), num).tolist()
-    #     return [self.paths[i] for i in idx]
-
-    # def norm(self, x=None, y=None):
-    #     # original range -> output range [-1, 1]
-    #     if x is not None:
-    #         if self.data_type[0] == 'd':
-    #             x = x*2 - 1
-    #         else:    
-    #             x /= self.x_range
-    #         # x = (x-r[0]) / (r[1]-r[0]) * 2 - 1 # rescaling
-        
-    #     if y is not None:
-    #         for i, ri in enumerate(self.y_range):
-    #             y[:,i] = (y[:,i]-ri[0]) / (ri[1]-ri[0]) * 2 - 1
-
-    #     return x, y
-
-    # def denorm_vel(self, x):
-    #     x *= self.v_range
-    #     # x = (x+1) * 0.5 * (r[1]-r[0]) + r[0] # [r0, r1]
-    #     return x
 
     def list_from_p(self, p_list):
         path_format = os.path.join(self.root, self.data_type[0], self.args['path_format'])
@@ -319,7 +306,11 @@ def test3d(config):
     batch_manager.start_thread(sess)
     x, y = batch_manager.batch()
     x_ = x.eval(session=sess)    
-    batch_manager.stop_thread()    
+    batch_manager.stop_thread()
+    
+    x_ = (x_+1)*127.5 # [0, 255]
+    x_ = np.mean(x_, axis=1) # yx
+    save_image(x_, '{}/x_fixed.png'.format(config.model_dir))
 
     # random pick from parameter space
     sample = batch_manager.random_list(config.batch_size)    
@@ -369,15 +360,59 @@ if __name__ == "__main__":
     from util import prepare_dirs_and_logger, save_config, save_image
     config, unparsed = get_config()
 
-    test2d(config)
-
     # ##############
-    # # test: 3d
-    # setattr(config, 'is_3d', True)
+    # # test: 2d    
+    # setattr(config, 'dataset', 'smoke_pos21_size5_f200')
+    # setattr(config, 'res_x', 96)
+    # setattr(config, 'res_y', 128)
+
+    # setattr(config, 'dataset', 'liquid_pos10_size4_f200')
+    # setattr(config, 'res_x', 128)
+    # setattr(config, 'res_y', 64)
+
+    # setattr(config, 'dataset', 'smoke_rot_f500')
+    # setattr(config, 'res_x', 96)
+    # setattr(config, 'res_y', 128)
+    # setattr(config, 'arch', 'ae')
+
+    # setattr(config, 'dataset', 'smoke_mov200_f400')
+    # setattr(config, 'res_x', 96)
+    # setattr(config, 'res_y', 128)
+    # setattr(config, 'arch', 'ae')
+
+    # test2d(config)
+
+    ##############
+    # test: 3d
+    setattr(config, 'is_3d', True)
+    setattr(config, 'batch_size', 4)
+
     # setattr(config, 'dataset', 'smoke3_vel5_buo3_f250')
     # setattr(config, 'res_x', 112)
     # setattr(config, 'res_y', 64)
     # setattr(config, 'res_z', 32)
-    # setattr(config, 'batch_size', 4)
-    # test3d(config)
+
+    # setattr(config, 'dataset', 'smoke3_obs11_buo4_f150')
+    # setattr(config, 'res_x', 64)
+    # setattr(config, 'res_y', 96)
+    # setattr(config, 'res_z', 64)
+
+    # setattr(config, 'dataset', 'liquid3_d5_r10_f150')
+    # setattr(config, 'res_x', 96)
+    # setattr(config, 'res_y', 48)
+    # setattr(config, 'res_z', 96)
+
+    setattr(config, 'dataset', 'smoke3_rot_f500')
+    setattr(config, 'res_x', 48)
+    setattr(config, 'res_y', 72)
+    setattr(config, 'res_z', 48)
+    setattr(config, 'arch', 'ae')
+
+    # setattr(config, 'dataset', 'smoke3_mov200_f400')
+    # setattr(config, 'res_x', 48)
+    # setattr(config, 'res_y', 72)
+    # setattr(config, 'res_z', 48)
+    # setattr(config, 'arch', 'ae')
+
+    test3d(config)
     # ##############

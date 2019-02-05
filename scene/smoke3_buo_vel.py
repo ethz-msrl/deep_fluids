@@ -47,19 +47,19 @@ parser.add_argument("--clamp_mode", type=int, default=2)
 args = parser.parse_args()
 
 def advect():
-    def get_param(p1, p2):
-        min_p1 = args.min_inflow
-        max_p1 = args.max_inflow
-        num_p1 = args.num_inflow
-        min_p2 = args.min_buoyancy
-        max_p2 = args.max_buoyancy
-        num_p2 = args.num_buoyancy
-        p1_ = p1/(num_p1-1) * (max_p1-min_p1) + min_p1
-        p2_ = p2/(num_p2-1) * (max_p2-min_p2) + min_p2
-        return p1_, p2_
+    # def get_param(p1, p2):
+    #     min_p1 = args.min_inflow
+    #     max_p1 = args.max_inflow
+    #     num_p1 = args.num_inflow
+    #     min_p2 = args.min_buoyancy
+    #     max_p2 = args.max_buoyancy
+    #     num_p2 = args.num_buoyancy
+    #     p1_ = p1/(num_p1-1) * (max_p1-min_p1) + min_p1
+    #     p2_ = p2/(num_p2-1) * (max_p2-min_p2) + min_p2
+    #     return p1_, p2_
 
     p1, p2 = 2, 1
-    p1_, p2_ = get_param(p1, p2)
+    # p1_, p2_ = get_param(p1, p2)
     v_path = os.path.join(args.log_dir, 'v')
     img_dir = os.path.join(args.log_dir, 'd_adv')
     if not os.path.exists(img_dir):
