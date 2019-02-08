@@ -19,7 +19,9 @@ This code is tested on Windows 10 and Ubuntu 16.04 with the following requiremen
 - [tqdm](https://github.com/tqdm/tqdm)
 - [mantaflow](http://mantaflow.com/)
 
-After installing anaconda, run `pip install --ignore-installed --upgrade tensorflow-gpu tqdm`. To install `mantaflow`, please follow the instruction at [mantaflow website](http://mantaflow.com).
+After installing anaconda, run `pip install --ignore-installed --upgrade tensorflow-gpu tqdm`.
+
+To install `mantaflow`, please follow the instruction at [mantaflow website](http://mantaflow.com). Note that `numpy` cmake option should be set to enable support for numpy arrays.
 
 ## Usage
 
@@ -35,7 +37,7 @@ To test:
     
     $ python main.py --is_train=False --load_path=MODEL_DIR
 
-Please take a closer look at `run.sh` (or `run.bat`) for each dataset.
+Please take a closer look at `run.bat` for each dataset.
 
 ## Results
 
