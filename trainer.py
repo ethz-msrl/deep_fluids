@@ -186,8 +186,8 @@ class Trainer(object):
 
         # summary
         summary = [
-            tf.summary.image("x/G", self.G),
-            tf.summary.image("x/G_vort", self.G_vort),
+            tf.summary.image("x/G", self.G[:,::-1]),
+            tf.summary.image("x/G_vort", self.G_vort[:,::-1]),
             
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/g_loss_l1", self.g_loss_l1),
@@ -216,8 +216,8 @@ class Trainer(object):
         self.summary_op = tf.summary.merge(summary)
         
         summary = [
-            tf.summary.image("x/x", denorm_img(self.x)),
-            tf.summary.image("x/vort", denorm_img(self.x_vort)),
+            tf.summary.image("x/x", denorm_img(self.x)[:,::-1]),
+            tf.summary.image("x/vort", denorm_img(self.x_vort)[:,::-1]),
         ]
         self.summary_once = tf.summary.merge(summary) # call just once
 
@@ -398,8 +398,8 @@ class Trainer(object):
 
         # summary
         summary = [
-            tf.summary.image("x", self.x_img),
-            tf.summary.image("x_vort", self.x_vort_),
+            tf.summary.image("x", self.x_img[:,::-1]),
+            tf.summary.image("x_vort", self.x_vort_[:,::-1]),
             
             tf.summary.scalar("loss/total_loss", self.loss),
             tf.summary.scalar("loss/loss_l1", self.loss_l1),
@@ -772,7 +772,7 @@ class Trainer(object):
 
     def get_vort_image(self, x):
         x = vort_np(x[:,:,:,:2])
-        x /= np.abs(x).max() # [-1,1]
+        if not 'ae' in self.arch: x /= np.abs(x).max() # [-1,1]
         x_img = (x+1)*127.5
         x_img = np.uint8(plt.cm.RdBu(x_img[...,0]/255)*255)[...,:3]
         return x_img

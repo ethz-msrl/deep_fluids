@@ -41,7 +41,7 @@ REM ..\manta\build\Release\manta.exe .\scene\smoke3_rot.py --log_dir=data\smoke3
 REM ----- smoke3_mov, 2D
 REM ..\manta\build\Release\manta.exe .\scene\smoke3_mov.py --log_dir=data\smoke_mov200_f400 --resolution_x=96 --resolution_y=128 --resolution_z=1 --open_bound=xXyY --num_dof=1
 REM 1. train AE
-REM python main.py --arch=ae --z_num=16 --max_epoch=20 --is_3d=False --dataset=smoke_mov200_f400 --res_x=96 --res_y=128
+REM python main.py --arch=ae --z_num=16 --max_epoch=10 --filter=64 --is_3d=False --dataset=smoke_mov200_f400 --res_x=96 --res_y=128
 
 REM 2. generate latent code set
 REM python main.py --is_train=False --load_path=AE_MODEL_DIR --arch=ae --z_num=16 --max_epoch=20 --is_3d=False --dataset=smoke_mov200_f400 --res_x=96 --res_y=128
@@ -58,4 +58,4 @@ REM python main.py --is_train=False --load_path=AE_MODEL_DIR --code_path=NN_MODE
 
 REM ----- smoke3_mov, 3D
 REM ..\manta\build\Release\manta.exe .\scene\smoke3_mov.py --log_dir=data\smoke3_mov200_f400 --resolution_x=48 --resolution_y=72 --resolution_z=48
-REM python main.py --arch=ae --z_num=16 --max_epoch=10 --is_3d=True --dataset=smoke3_mov200_f400 --data_dir=D:/dev/deep-fluids-mov/data --res_x=48 --res_y=72 --res_z=48 --batch_size=3 --num_worker=1 --test_step=20 --log_step=20
+REM python main.py --arch=ae --z_num=16 --max_epoch=10 --filter=64 --is_3d=True --lr_max=0.00005 --dataset=smoke3_mov200_f400 --res_x=48 --res_y=72 --res_z=48 --batch_size=4 --num_worker=1

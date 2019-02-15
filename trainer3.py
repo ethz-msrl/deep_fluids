@@ -67,13 +67,13 @@ class Trainer3(Trainer):
         summary = [
             # tf.summary.image("xy/G", self.G['xy']),
             # tf.summary.image("zy/G", self.G['zy']),
-            tf.summary.image("xym/G", self.G['xym']),
-            tf.summary.image("zym/G", self.G['zym']),
+            tf.summary.image("xym/G", self.G['xym'][:,::-1]),
+            tf.summary.image("zym/G", self.G['zym'][:,::-1]),
             
             # tf.summary.image("xy/G_vort", self.G_vort['xy']),
             # tf.summary.image("zy/G_vort", self.G_vort['zy']),
-            tf.summary.image("xym/G_vort", self.G_vort['xym']),
-            tf.summary.image("zym/G_vort", self.G_vort['zym']),
+            tf.summary.image("xym/G_vort", self.G_vort['xym'][:,::-1]),
+            tf.summary.image("zym/G_vort", self.G_vort['zym'][:,::-1]),
             
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/g_loss_l1", self.g_loss_l1),
@@ -101,10 +101,10 @@ class Trainer3(Trainer):
         x_vort = denorm_img3(self.x_vort)
         
         summary = [
-            tf.summary.image("xym/x", x['xym']),
-            tf.summary.image("zym/x", x['zym']),
-            tf.summary.image("xym/vort", x_vort['xym']),
-            tf.summary.image("zym/vort", x_vort['zym']),
+            tf.summary.image("xym/x", x['xym'][:,::-1]),
+            tf.summary.image("zym/x", x['zym'][:,::-1]),
+            tf.summary.image("xym/vort", x_vort['xym'][:,::-1]),
+            tf.summary.image("zym/vort", x_vort['zym'][:,::-1]),
         ]
         self.summary_once = tf.summary.merge(summary) # call just once
 
@@ -281,11 +281,11 @@ class Trainer3(Trainer):
 
         # summary
         summary = [
-            tf.summary.image("x/xym", self.x_img['xym']),
-            tf.summary.image("x/zym", self.x_img['zym']),
+            tf.summary.image("x/xym", self.x_img['xym'][:,::-1]),
+            tf.summary.image("x/zym", self.x_img['zym'][:,::-1]),
 
-            tf.summary.image("x/vort_xym", self.x_vort_['xym']),
-            tf.summary.image("x/vort_zym", self.x_vort_['zym']),
+            tf.summary.image("x/vort_xym", self.x_vort_['xym'][:,::-1]),
+            tf.summary.image("x/vort_zym", self.x_vort_['zym'][:,::-1]),
             
             tf.summary.scalar("loss/total_loss", self.loss),
             tf.summary.scalar("loss/loss_l1", self.loss_l1),

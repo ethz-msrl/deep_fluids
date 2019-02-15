@@ -62,7 +62,7 @@ def rank(array):
     return len(array.shape)
 
 def make_grid(tensor, nrow=8, padding=2,
-              normalize=False, scale_each=False):
+              normalize=False, scale_each=False, flip=True):
     """Code based on https://github.com/pytorch/vision/blob/master/torchvision/utils.py"""
     nmaps = tensor.shape[0]
     xmaps = min(nrow, nmaps)
@@ -77,19 +77,21 @@ def make_grid(tensor, nrow=8, padding=2,
             h, h_width = y * height + 1 + padding // 2, height - padding
             w, w_width = x * width + 1 + padding // 2, width - padding
 
-            grid[h:h+h_width, w:w+w_width] = tensor[k]
+            if flip: grid[h:h+h_width, w:w+w_width] = tensor[k,::-1]
+            else: grid[h:h+h_width, w:w+w_width] = tensor[k]
             k = k + 1
     return grid
 
 def save_image(tensor, filename, nrow=8, padding=2,
-               normalize=False, scale_each=False, single=False):
+               normalize=False, scale_each=False, flip=True, single=False):
     if not single:
         ndarr = make_grid(tensor, nrow=nrow, padding=padding,
-                                normalize=normalize, scale_each=scale_each)
+                          normalize=normalize, scale_each=scale_each, flip=flip)
     else:
         h, w = tensor.shape[0], tensor.shape[1]
         ndarr = np.zeros([h,w,3], dtype=np.uint8)
-        ndarr[:,:] = tensor[:,:]
+        if flip: ndarr = tensor[::-1]
+        else: ndarr = tensor
     
     im = Image.fromarray(ndarr)
     im.save(filename)

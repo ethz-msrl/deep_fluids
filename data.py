@@ -313,12 +313,14 @@ def preprocess(file_path, data_type, x_range, y_range):
         x = data['x']
         y = data['y']
 
-    # ############## for old data
-    if x.ndim == 4:
-        # x = x.transpose([2,0,1,3]) # yxzd -> zyxd
-        x = x[:,::-1] # horizontal flip
-    else:
-        x = x[::-1] # horizontal flip
+    # # ############## for old data
+    # if x.ndim == 4:
+    #     x = x.transpose([2,0,1,3]) # yxzd -> zyxd
+    # else:
+    #     y = y[None,]
+    #     x = x[:,::-1] # horizontal flip
+    # else:
+    #     x = x[::-1] # horizontal flip
 
     # normalize
     if data_type[0] == 'd':
@@ -450,9 +452,7 @@ if __name__ == "__main__":
     # # setattr(config, 'res_y', 48)
     # # setattr(config, 'res_z', 96)
 
-    # # setattr(config, 'data_dir', 'D:/dev/deep-fluids-mov/data')
-    # # setattr(config, 'dataset', 'smoke3_circle_f500')
-    # # # setattr(config, 'dataset', 'smoke3_rot_f500')
+    # # setattr(config, 'dataset', 'smoke3_rot_f500')
     # # setattr(config, 'res_x', 48)
     # # setattr(config, 'res_y', 72)
     # # setattr(config, 'res_z', 48)
