@@ -130,10 +130,10 @@ class Trainer3(Trainer):
 
         # test2: compare to gt
         gen_list = self.batch_manager.random_list(self.b_num)
-        x_xy = np.concatenate((gen_list['xym'],gen_list['xym_c']), axis=0)
-        x_zy = np.concatenate((gen_list['zym'],gen_list['zym_c']), axis=0)
-        save_image(x_xy, '{}/x_fixed_xym_gt.png'.format(self.model_dir), padding=1, nrow=self.b_num)
-        save_image(x_zy, '{}/x_fixed_zym_gt.png'.format(self.model_dir), padding=1, nrow=self.b_num)
+        x_xy = gen_list['xym']
+        # x_xy = np.concatenate((gen_list['xym'],gen_list['xym_c']), axis=0)
+        # x_zy = np.concatenate((gen_list['zym'],gen_list['zym_c']), axis=0)
+        save_image(x_xy, '{}/x_fixed_gt.png'.format(self.model_dir), padding=1, nrow=self.b_num)
         with open('{}/x_fixed_gt.txt'.format(self.model_dir), 'w') as f:
             f.write(str(gen_list['p']) + '\n')
             f.write(str(gen_list['z']))
@@ -198,8 +198,8 @@ class Trainer3(Trainer):
 
         # xyw_list = []
         # zyw_list = []
-        xymw_list = []
-        zymw_list = []
+        # xymw_list = []
+        # zymw_list = []
 
         for _, z_sample in enumerate(inputs):
             xym, zym = self.sess.run( # xy, zy, 
@@ -209,32 +209,32 @@ class Trainer3(Trainer):
             xym_list.append(xym)
             zym_list.append(zym)
 
-            xym, zym = self.sess.run( # xy, zy, 
-                [self.G_vort['xym'], self.G_vort['zym']], {self.y: z_sample}) # self.G_vort['xy'], self.G_vort['zy'], 
-            # xyw_list.append(xy)
-            # zyw_list.append(zy)
-            xymw_list.append(xym)
-            zymw_list.append(zym)
+            # xym, zym = self.sess.run( # xy, zy, 
+            #     [self.G_vort['xym'], self.G_vort['zym']], {self.y: z_sample}) # self.G_vort['xy'], self.G_vort['zy'], 
+            # # xyw_list.append(xy)
+            # # zyw_list.append(zy)
+            # xymw_list.append(xym)
+            # zymw_list.append(zym)
 
-        xym_list = xym_list[:-1] + xymw_list[:-1] + [xym_list[-1]] + [xymw_list[-1]]
-        zym_list = zym_list[:-1] + zymw_list[:-1] + [zym_list[-1]] + [zymw_list[-1]]
+        # xym_list = xym_list[:-1] + xymw_list[:-1] + [xym_list[-1]] + [xymw_list[-1]]
+        # zym_list = zym_list[:-1] + zymw_list[:-1] + [zym_list[-1]] + [zymw_list[-1]]
 
         for tag, generated in zip(['xym','zym'], # '0_xy','0_zy',
                                   [xym_list, zym_list]): # xy_list, zy_list, 
-            c_concat = np.concatenate(tuple(generated[:-2]), axis=0)
-            c_path = os.path.join(root_path, '{}_{}.png'.format(idx,tag))
+            c_concat = np.concatenate(tuple(generated[:-1]), axis=0)
+            c_path = os.path.join(root_path, '{}_{}.png'.format(tag,idx))
             save_image(c_concat, c_path, nrow=self.b_num, padding=1)
             print("[*] Samples saved: {}".format(c_path))
 
-        gen_random = np.concatenate(tuple(xym_list[-2:]), axis=0)
-        x_xy_path = os.path.join(root_path, 'x_fixed_xym_{}.png'.format(idx))
+        gen_random = np.concatenate(tuple(xym_list[-1:]), axis=0)
+        x_xy_path = os.path.join(root_path, 'x_fixed_{}.png'.format(idx))
         save_image(gen_random, x_xy_path, nrow=self.b_num, padding=1)
         print("[*] Samples saved: {}".format(x_xy_path))
 
-        gen_random = np.concatenate(tuple(zym_list[-2:]), axis=0)
-        x_zy_path = os.path.join(root_path, 'x_fixed_zym_{}.png'.format(idx))
-        save_image(gen_random, x_zy_path, nrow=self.b_num, padding=1)
-        print("[*] Samples saved: {}".format(x_zy_path))
+        # gen_random = np.concatenate(tuple(zym_list[-1:]), axis=0)
+        # x_zy_path = os.path.join(root_path, 'x_fixed_zym_{}.png'.format(idx))
+        # save_image(gen_random, x_zy_path, nrow=self.b_num, padding=1)
+        # print("[*] Samples saved: {}".format(x_zy_path))
         
 
     def build_model_ae(self):

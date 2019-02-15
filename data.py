@@ -190,7 +190,7 @@ class BatchManager(object):
         if y is not None:
             r = self.y_range
             for i, ri in enumerate(self.y_range):
-                y[:,i] = (y[:,i]+1) * 0.5 * (ri[1]-ri[0]) + ri[0]
+                y[i] = (y[i]+1) * 0.5 * (ri[1]-ri[0]) + ri[0]
         return x, y
 
     def list_from_p(self, p_list):
@@ -255,7 +255,7 @@ class BatchManager(object):
             file_path = file_list[i]
             x, y = preprocess(file_path, self.data_type, self.x_range, self.y_range)
             sample['z'].append(y)
-            _, p = self.denorm(y)
+            _, p = self.denorm(y=y.copy())
             sample['p'].append(p)
 
             xy = plane_view_np(x, xy_plane=True, project=True)
