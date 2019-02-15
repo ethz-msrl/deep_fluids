@@ -12,6 +12,7 @@ import imageio
 from glob import glob
 import shutil
 import matplotlib.pyplot as plt
+import matplotlib
 
 def prepare_dirs_and_logger(config):
     # print(__file__)
@@ -61,7 +62,7 @@ def rank(array):
     return len(array.shape)
 
 def make_grid(tensor, nrow=8, padding=2,
-              normalize=False, scale_each=False):
+              normalize=False, scale_each=False, flip=True):
     """Code based on https://github.com/pytorch/vision/blob/master/torchvision/utils.py"""
     nmaps = tensor.shape[0]
     xmaps = min(nrow, nmaps)
@@ -76,25 +77,40 @@ def make_grid(tensor, nrow=8, padding=2,
             h, h_width = y * height + 1 + padding // 2, height - padding
             w, w_width = x * width + 1 + padding // 2, width - padding
 
-            grid[h:h+h_width, w:w+w_width] = tensor[k]
+            if flip: grid[h:h+h_width, w:w+w_width] = tensor[k,::-1]
+            else: grid[h:h+h_width, w:w+w_width] = tensor[k]
             k = k + 1
     return grid
 
 def save_image(tensor, filename, nrow=8, padding=2,
-               normalize=False, scale_each=False, single=False,
-               flip=True):
+               normalize=False, scale_each=False, flip=True, single=False):
     if not single:
-        if flip: tensor = tensor[:,::-1]
         ndarr = make_grid(tensor, nrow=nrow, padding=padding,
-                                normalize=normalize, scale_each=scale_each)
+                          normalize=normalize, scale_each=scale_each, flip=flip)
     else:
-        if flip: tensor = tensor[:,::-1]
         h, w = tensor.shape[0], tensor.shape[1]
         ndarr = np.zeros([h,w,3], dtype=np.uint8)
-        ndarr[:,:] = tensor[:,:]
+        if flip: ndarr = tensor[::-1]
+        else: ndarr = tensor
     
     im = Image.fromarray(ndarr)
     im.save(filename)
+
+def v2rgb(v):
+    # v: [-1,1]
+    # lazyfluid colormap: red at 0 deg, and rainbow in clockwise
+    # blue  - purple - magenta 
+    # cyan  -        - red
+    # green - yellow - orange
+    theta = np.arctan2(-v[...,1], -v[...,0]) # [-pi,pi]
+    theta = 1 - (theta + np.pi) / (2*np.pi) # [0,1]
+    r = np.sqrt(v[...,0]**2+v[...,1]**2)
+    r /= np.sqrt(2) # [0,1]
+    o = np.ones_like(r) * 0.75 # value, not too bright
+    hsv = np.stack((theta,r,o), axis=-1)
+    rgb = matplotlib.colors.hsv_to_rgb(hsv) # [0,1]
+    rgb = (rgb*255).astype(np.uint8)
+    return rgb
 
 def streamplot(x, filename, density=2.0, scale=5.0):
     # uv: [y,x,2]

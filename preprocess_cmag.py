@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from tqdm import trange
 
-cmag_dir = os.path.join('E:/deep-fluids/data', 'cmag_dataset')
+cmag_dir = os.path.join('data', 'cmag_dataset')
 cmag_path = os.path.join(cmag_dir, 'master_feature_matrix_v2.npy')
 data = np.load(cmag_path)
 nrow = 119
@@ -31,7 +31,7 @@ print('# pairs', n)
 
 
 sampling = True
-res = 32
+res = 16
 args_file = os.path.join(cmag_dir, 'args.txt')
 with open(args_file, 'w') as f:
     f.write('num_param: 8\n')

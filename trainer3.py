@@ -24,24 +24,15 @@ class Trainer3(Trainer):
         self.G_jaco_, self.G_vort_ = jacobian3(self.G_)
         self.G_vort = denorm_img3(self.G_vort_)
         
-        # to test
-        self.z = tf.random_uniform(shape=[self.b_num, self.c_num], minval=-1.0, maxval=1.0)
-        if self.use_c:
-            self.G_z_s, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
-                                        num_conv=self.num_conv, repeat=self.repeat, reuse=True)
-            _, self.G_z_ = jacobian3(self.G_z_s)
-        else:
-            self.G_z_, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
-                                       num_conv=self.num_conv, repeat=self.repeat, reuse=True)
-        self.G_z = denorm_img3(self.G_z_) # for debug
-
-        self.G_z_jaco_, self.G_z_vort_ = jacobian3(self.G_z_)
-        self.G_z_vort = denorm_img3(self.G_z_vort_)
-        
         if 'dg' in self.arch:
             # discriminator
-            self.D_x, self.D_var = DiscriminatorPatch3(self.x, self.filters)
-            self.D_G, _ = DiscriminatorPatch3(self.G_, self.filters, reuse=True)
+            # self.D_x, self.D_var = DiscriminatorPatch3(self.x, self.filters)
+            # self.D_G, _ = DiscriminatorPatch3(self.G_, self.filters, reuse=True)
+            D_in = tf.concat([self.x, self.x_vort], axis=-1)
+            self.D_x, self.D_var = DiscriminatorPatch3(D_in, self.filters)
+            G_in = tf.concat([self.G_, self.G_vort_], axis=-1)
+            self.D_G, _ = DiscriminatorPatch3(G_in, self.filters, reuse=True)
+
 
         show_all_variables()
 
@@ -74,26 +65,16 @@ class Trainer3(Trainer):
 
         # summary
         summary = [
-            # tf.summary.image("G/xy", self.G['xy']),
-            # tf.summary.image("G/zy", self.G['zy']),
-            tf.summary.image("G/xym", self.G['xym']),
-            tf.summary.image("G/zym", self.G['zym']),
+            # tf.summary.image("xy/G", self.G['xy']),
+            # tf.summary.image("zy/G", self.G['zy']),
+            tf.summary.image("xym/G", self.G['xym'][:,::-1]),
+            tf.summary.image("zym/G", self.G['zym'][:,::-1]),
             
-            # tf.summary.image("G_z/xy", self.G_z['xy']),
-            # tf.summary.image("G_z/zy", self.G_z['zy']),
-            tf.summary.image("G_z/xym", self.G_z['xym']),
-            tf.summary.image("G_z/zym", self.G_z['zym']),
+            # tf.summary.image("xy/G_vort", self.G_vort['xy']),
+            # tf.summary.image("zy/G_vort", self.G_vort['zy']),
+            tf.summary.image("xym/G_vort", self.G_vort['xym'][:,::-1]),
+            tf.summary.image("zym/G_vort", self.G_vort['zym'][:,::-1]),
             
-            # tf.summary.image("G_vort/xy", self.G_vort['xy']),
-            # tf.summary.image("G_vort/zy", self.G_vort['zy']),
-            tf.summary.image("G_vort/xym", self.G_vort['xym']),
-            tf.summary.image("G_vort/zym", self.G_vort['zym']),
-            
-            # tf.summary.image("G_z_vort/xy", self.G_z_vort['xy']),
-            # tf.summary.image("G_z_vort/zy", self.G_z_vort['zy']),
-            tf.summary.image("G_z_vort/xym", self.G_z_vort['xym']),
-            tf.summary.image("G_z_vort/zym", self.G_z_vort['zym']),
-
             tf.summary.scalar("loss/g_loss", self.g_loss),
             tf.summary.scalar("loss/g_loss_l1", self.g_loss_l1),
             tf.summary.scalar("loss/g_loss_j_l1", self.g_loss_j_l1),
@@ -102,7 +83,6 @@ class Trainer3(Trainer):
             tf.summary.scalar('misc/q', self.batch_manager.q.size()),
 
             tf.summary.histogram("y", self.y),
-            tf.summary.histogram("z", self.z),
 
             tf.summary.scalar("misc/g_lr", self.g_lr),
         ]
@@ -121,19 +101,22 @@ class Trainer3(Trainer):
         x_vort = denorm_img3(self.x_vort)
         
         summary = [
-            # tf.summary.image("x/xy", x['xy']),
-            # tf.summary.image("x/zy", x['zy']),
-            tf.summary.image("x/xym", x['xym']),
-            tf.summary.image("x/zym", x['zym']),
-
-            # tf.summary.image("x_vort/xy", x_vort['xy']),
-            # tf.summary.image("x_vort/zy", x_vort['zy']),
-            tf.summary.image("x_vort/xym", x_vort['xym']),
-            tf.summary.image("x_vort/zym", x_vort['zym']),
+            tf.summary.image("xym/x", x['xym'][:,::-1]),
+            tf.summary.image("zym/x", x['zym'][:,::-1]),
+            tf.summary.image("xym/vort", x_vort['xym'][:,::-1]),
+            tf.summary.image("zym/vort", x_vort['zym'][:,::-1]),
         ]
         self.summary_once = tf.summary.merge(summary) # call just once
 
     def train(self):
+        if 'ae' in self.arch:
+            self.train_ae()
+        elif 'nn' in self.arch:
+            self.train_nn()
+        else:
+            self.train_()
+
+    def train_(self):
         # test1: varying on each axis
         z_range = [-1, 1]
         z_shape = (self.b_num, self.c_num)
@@ -220,14 +203,14 @@ class Trainer3(Trainer):
 
         for _, z_sample in enumerate(inputs):
             xym, zym = self.sess.run( # xy, zy, 
-                [self.G['xym'], self.G['zym']], {self.z: z_sample}) # self.G['xy'], self.G['zy'], 
+                [self.G['xym'], self.G['zym']], {self.y: z_sample}) # self.G['xy'], self.G['zy'], 
             # xy_list.append(xy)
             # zy_list.append(zy)
             xym_list.append(xym)
             zym_list.append(zym)
 
             xym, zym = self.sess.run( # xy, zy, 
-                [self.G_vort['xym'], self.G_vort['zym']], {self.z: z_sample}) # self.G_vort['xy'], self.G_vort['zy'], 
+                [self.G_vort['xym'], self.G_vort['zym']], {self.y: z_sample}) # self.G_vort['xy'], self.G_vort['zy'], 
             # xyw_list.append(xy)
             # zyw_list.append(zy)
             xymw_list.append(xym)
@@ -252,3 +235,134 @@ class Trainer3(Trainer):
         x_zy_path = os.path.join(root_path, 'x_fixed_zym_{}.png'.format(idx))
         save_image(gen_random, x_zy_path, nrow=self.b_num, padding=1)
         print("[*] Samples saved: {}".format(x_zy_path))
+        
+
+    def build_model_ae(self):
+        if self.use_c:
+            self.s, self.z, self.var = AE3(self.x, self.filters, self.z_num, use_sparse=self.use_sparse,
+                                          num_conv=self.num_conv, repeat=self.repeat)
+            _, self.x_ = jacobian3(self.s)
+        else:
+            self.x_, self.z, self.var = AE3(self.x, self.filters, self.z_num, use_sparse=self.use_sparse,
+                                            num_conv=self.num_conv, repeat=self.repeat)
+        self.x_img = denorm_img3(self.x_) # for debug
+
+        self.x_jaco_, self.x_vort_ = jacobian3(self.x_)
+        self.x_vort_ = denorm_img3(self.x_vort_)
+
+        show_all_variables()
+
+        if self.optimizer == 'adam':
+            optimizer = tf.train.AdamOptimizer
+            g_optimizer = optimizer(self.g_lr, beta1=self.beta1, beta2=self.beta2)
+        elif self.optimizer == 'gd':
+            optimizer = tf.train.GradientDescentOptimizer
+            g_optimizer = optimizer(self.g_lr)
+        else:
+            raise Exception("[!] Invalid opimizer")
+
+        # losses
+        self.loss_l1 = tf.reduce_mean(tf.abs(self.x_ - self.x))
+        self.loss_j_l1 = tf.reduce_mean(tf.abs(self.x_jaco_ - self.x_jaco))
+        
+        y = self.y[:,:,-1]
+        self.loss_p = tf.reduce_mean(tf.squared_difference(y, self.z[:,-self.p_num:]))
+        self.loss = self.loss_l1*self.w1 + self.loss_j_l1*self.w2 + self.loss_p*self.w4
+        
+        if self.use_sparse:
+            ds = tf.distributions
+            rho = ds.Bernoulli(probs=self.sparsity)
+            rho_ = ds.Bernoulli(probs=tf.reduce_mean(self.z[:,:-self.p_num], axis=0))
+            self.loss_kl = tf.reduce_sum(ds.kl_divergence(rho, rho_))
+            self.loss += self.loss_kl*self.w5
+
+        self.optim = g_optimizer.minimize(self.loss, global_step=self.step, var_list=self.var)
+        self.epoch = tf.placeholder(tf.float32)
+
+        # summary
+        summary = [
+            tf.summary.image("x/xym", self.x_img['xym'][:,::-1]),
+            tf.summary.image("x/zym", self.x_img['zym'][:,::-1]),
+
+            tf.summary.image("x/vort_xym", self.x_vort_['xym'][:,::-1]),
+            tf.summary.image("x/vort_zym", self.x_vort_['zym'][:,::-1]),
+            
+            tf.summary.scalar("loss/total_loss", self.loss),
+            tf.summary.scalar("loss/loss_l1", self.loss_l1),
+            tf.summary.scalar("loss/loss_j_l1", self.loss_j_l1),
+            tf.summary.scalar("loss/loss_p", self.loss_p),
+
+            tf.summary.scalar("misc/epoch", self.epoch),
+            tf.summary.scalar('misc/q', self.batch_manager.q.size()),
+
+            tf.summary.histogram("y", y),
+            tf.summary.histogram("z", self.z),
+
+            tf.summary.scalar("misc/g_lr", self.g_lr),
+        ]
+
+        if self.use_sparse:
+            summary += [
+                tf.summary.scalar("loss/loss_kl", self.loss_kl),
+            ]
+
+        self.summary_op = tf.summary.merge(summary)
+
+    def train_ae(self):
+        sample = self.batch_manager.random_list(self.b_num)    
+        save_image(sample['xym'], '{}/xym_gt.png'.format(self.model_dir), nrow=self.b_num)
+        save_image(sample['zym'], '{}/zym_gt.png'.format(self.model_dir), nrow=self.b_num)
+        with open('{}/x_fixed_gt.txt'.format(self.model_dir), 'w') as f:
+            f.write(str(sample['p']))
+            f.write(str(sample['z']))
+        
+        # train
+        for step in trange(self.start_step, self.max_step):
+            self.sess.run(self.optim)
+
+            if step % self.log_step == 0 or step == self.max_step-1:
+                ep = step*self.batch_manager.epochs_per_step
+                loss, summary = self.sess.run([self.loss,self.summary_op],
+                                              feed_dict={self.epoch: ep})
+                assert not np.isnan(loss), 'Model diverged with loss = NaN'
+                print("\n[{}/{}/ep{:.2f}] Loss: {:.6f}".format(step, self.max_step, ep, loss))
+
+                self.summary_writer.add_summary(summary, global_step=step)
+                self.summary_writer.flush()
+
+            if step % self.test_step == 0 or step == self.max_step-1:
+                self.autoencode(sample['x'], self.model_dir, idx=step)
+
+            if self.lr_update == 'step':
+                if step % self.lr_update_step == self.lr_update_step - 1:
+                    self.sess.run(self.g_lr_update)
+            else:
+                self.sess.run(self.g_lr_update)
+
+        # save last checkpoint..
+        save_path = os.path.join(self.model_dir, 'model.ckpt')
+        self.saver.save(self.sess, save_path, global_step=self.step)
+        self.batch_manager.stop_thread()
+
+    def build_test_model_ae(self):
+        self.x = tf.placeholder(dtype=tf.float32, shape=[self.test_b_num, self.res_z, self.res_y, self.res_x, 3])
+        if self.use_c:
+            self.s, self.z, self.var = AE3(self.x, self.filters, self.z_num, use_sparse=self.use_sparse,
+                                          num_conv=self.num_conv, repeat=self.repeat, reuse=True)
+            _, self.x_ = jacobian3(self.s)
+        else:
+            self.x_, self.z, self.var = AE3(self.x, self.filters, self.z_num, use_sparse=self.use_sparse,
+                                              num_conv=self.num_conv, repeat=self.repeat, reuse=True)
+        self.x_img = denorm_img3(self.x_) # for debug
+
+    def autoencode(self, x, root_path=None, idx=None):
+        # only for 2d
+        x_img = self.sess.run(self.x_img, {self.x: x})
+        xym = x_img['xym']
+        x_path = os.path.join(root_path, 'xym_{}.png'.format(idx))
+        save_image(xym, x_path, nrow=self.b_num)
+        print("[*] Samples saved: {}".format(x_path))
+        zym = x_img['zym']
+        x_path = os.path.join(root_path, 'zym_{}.png'.format(idx))
+        save_image(zym, x_path, nrow=self.b_num)
+        print("[*] Samples saved: {}".format(x_path))

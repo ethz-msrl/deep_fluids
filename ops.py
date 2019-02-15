@@ -151,17 +151,16 @@ def remove_channels(x, data_format='NHWC'):
         x, _ = tf.split(x, [3, -1], axis=3)
     return x
 
-def denorm_img(norm, flip=True, data_format='NHWC'):
+def denorm_img(norm, data_format='NHWC'):
     _, _, _, c = get_conv_shape(norm, data_format)
     if c == 2:
         norm = add_channels(norm, num_ch=1, data_format=data_format)
     elif c > 3:
         norm = remove_channels(norm, data_format=data_format)
     img = tf.cast(tf.clip_by_value(to_nhwc((norm + 1)*127.5, data_format), 0, 255), tf.uint8)
-    if flip: img = img[:,::-1]
     return img
 
-def plane_view(x, flip=True, xy_plane=True, project=True):
+def plane_view(x, xy_plane=True, project=True):
     x_shape = int_shape(x) # bzyxd
     c_id = [int(x_shape[1]/2), int(x_shape[3]/2)]
     
@@ -179,7 +178,6 @@ def plane_view(x, flip=True, xy_plane=True, project=True):
                     [3]), [0,2,1,3])
 
     x = tf.cast(tf.clip_by_value((x + 1)*127.5, 0, 255), tf.uint8)
-    if flip: x = x[:,::-1]
     return x
 
 def denorm_img3(x):
@@ -209,14 +207,14 @@ def jacobian(x, data_format='NHCW'):
         x = nchw_to_nhwc(x)
 
     dudx = x[:,:,1:,0] - x[:,:,:-1,0]
-    dudy = x[:,:-1,:,0] - x[:,1:,:,0] # horizontally flipped
+    dudy = x[:,1:,:,0] - x[:,:-1,:,0]
     dvdx = x[:,:,1:,1] - x[:,:,:-1,1]
-    dvdy = x[:,:-1,:,1] - x[:,1:,:,1] # horizontally flipped
+    dvdy = x[:,1:,:,1] - x[:,:-1,:,1]
     
     dudx = tf.concat([dudx,tf.expand_dims(dudx[:,:,-1], axis=2)], axis=2)
     dvdx = tf.concat([dvdx,tf.expand_dims(dvdx[:,:,-1], axis=2)], axis=2)
-    dudy = tf.concat([tf.expand_dims(dudy[:,0,:], axis=1), dudy], axis=1)
-    dvdy = tf.concat([tf.expand_dims(dvdy[:,0,:], axis=1), dvdy], axis=1)
+    dudy = tf.concat([dudy,tf.expand_dims(dudy[:,-1,:], axis=1)], axis=1)
+    dvdy = tf.concat([dvdy,tf.expand_dims(dvdy[:,-1,:], axis=1)], axis=1)
 
     j = tf.stack([dudx,dudy,dvdx,dvdy], axis=-1)
     w = tf.expand_dims(dvdx - dudy, axis=-1) # vorticity (for visualization)
@@ -306,8 +304,8 @@ def pgrad(x, data_format):
 
 def vort_np(x):
     dvdx = x[:,:,1:,1] - x[:,:,:-1,1]
-    dvdx = np.concatenate([dvdx,np.expand_dims(dvdx[:,:,-1], axis=2)], axis=2)
     dudy = x[:,1:,:,0] - x[:,:-1,:,0]
+    dvdx = np.concatenate([dvdx,np.expand_dims(dvdx[:,:,-1], axis=2)], axis=2)
     dudy = np.concatenate([dudy,np.expand_dims(dudy[:,-1,:], axis=1)], axis=1)
     return np.expand_dims(dvdx - dudy, axis=-1)
 
