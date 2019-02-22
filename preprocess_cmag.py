@@ -16,6 +16,12 @@ bmax = np.amax(data[:,-3:])
 print('data shape', data.shape)
 print('# pairs', n)
 
+# remove 10 % for testing
+n_test = int(0.1 * n)
+n_train = n - n_test
+
+print('training with %d samples testing with %d' % (n_train, n_test))
+
 # # visualize
 # fig = plt.figure()
 # ax = fig.add_subplot(111, projection='3d')
@@ -42,9 +48,13 @@ with open(args_file, 'w') as f:
     f.write('res: %d\n' % res)
     f.write('sampling: %d\n' % sampling)
 
-data_dir = os.path.join(cmag_dir, 'v')
-if not os.path.exists(data_dir):
-    os.makedirs(data_dir)
+train_dir = os.path.join(cmag_dir, 'v')
+test_dir = os.path.join(cmag_dir, 'test')
+
+if not os.path.exists(train_dir):
+    os.makedirs(train_dir)
+if not os.path.exists(test_dir):
+    os.makedirs(test_dir)
 
 # for regular grid interpolation
 if sampling:
@@ -120,5 +130,9 @@ for i in trange(n):
 
         x = np.stack((bx_, by_, bz_), axis=-1) 
     
-    file_path = os.path.join(data_dir, '%04d.npz' % i)
+    if i < n_train:
+        file_path = os.path.join(train_dir, '%04d.npz' % i)
+    else:
+        file_path = os.path.join(test_dir, '%04d.npz' % i)
+
     np.savez_compressed(file_path, x=x, y=y)

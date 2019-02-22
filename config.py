@@ -56,6 +56,13 @@ train_arg.add_argument('--beta2', type=float, default=0.999)
 train_arg.add_argument('--lr_update', type=str, default='decay',
                        choices=['decay', 'step'])
 
+test_arg = add_argument_group('Testing')
+test_arg.add_argument('--test_size', type=float, default=0.1)
+test_arg.add_argument('--test_path', type=str, default='test')
+test_arg.add_argument('--load_model_dir', type=str, default='')
+test_arg.add_argument('--load_data_path', type=str, default='data/cmag_dataset')
+test_arg.add_argument('--generate_streamplots', type=bool, default=False)
+
 # Misc
 misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--log_dir', type=str, default='log')

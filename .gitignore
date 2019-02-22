@@ -2,3 +2,5 @@ __pycache__
 data
 log
 waveletNoiseTile.bin
+*.pyc
+*.swp
