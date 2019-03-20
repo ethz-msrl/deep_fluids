@@ -347,11 +347,11 @@ def test3d(config):
     x_ = x.eval(session=sess)    
     batch_manager.stop_thread()
 
-    dudx = x_[:,:-1,:-1,1:,0] - x_[:,:-1,:-1,:-1,0]
-    dvdy = x_[:,:-1,1:,:-1,1] - x_[:,:-1,:-1,:-1,1]
-    dwdz = x_[:,1:,:-1,:-1,2] - x_[:,:-1,:-1,:-1,2]
+    x__, _ = batch_manager.denorm(x=x_) # to original scale
+    dudx = x__[:,:-1,:-1,1:,0] - x__[:,:-1,:-1,:-1,0]
+    dvdy = x__[:,:-1,1:,:-1,1] - x__[:,:-1,:-1,:-1,1]
+    dwdz = x__[:,1:,:-1,:-1,2] - x__[:,:-1,:-1,:-1,2]
     div = dudx + dvdy + dwdz
-
     div_ = np.sum(div, axis=(1,2,3))
     print(div_)
 
