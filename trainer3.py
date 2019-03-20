@@ -94,6 +94,24 @@ class Trainer3(Trainer):
                 tf.summary.scalar("loss/d_loss_fake", tf.sqrt(self.d_loss_fake)),
             ]
 
+        if self.use_c: 
+            self.x_div_ = divergence3(self.x)
+            self.G_div_ = divergence3(self.G_)
+            self.G_div_img = denorm_img3(self.G_div_)
+
+            self.x_div_mean = tf.reduce_mean(tf.abs(self.x_div_))
+            self.x_div_max = tf.reduce_max(tf.abs(self.x_div_))
+            self.g_loss_div = tf.reduce_mean(tf.abs(self.G_div_))
+            self.g_loss_div_max = tf.reduce_max(tf.abs(self.G_div_))
+
+            summary += [
+                tf.summary.image("G_div", self.G_div_img['xym'][:,::-1]),
+                tf.summary.scalar("loss/g_loss_div", self.g_loss_div),
+                tf.summary.scalar("loss/g_loss_div_max", self.g_loss_div_max),
+                tf.summary.scalar('misc/x_div_mean', self.x_div_mean),
+                tf.summary.scalar('misc/x_div_max', self.x_div_max)
+            ]
+
         self.summary_op = tf.summary.merge(summary)
 
         # summary once
