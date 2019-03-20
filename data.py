@@ -346,7 +346,15 @@ def test3d(config):
     x, y = batch_manager.batch()
     x_ = x.eval(session=sess)    
     batch_manager.stop_thread()
-    
+
+    dudx = x_[:,:-1,:-1,1:,0] - x_[:,:-1,:-1,:-1,0]
+    dvdy = x_[:,:-1,1:,:-1,1] - x_[:,:-1,:-1,:-1,1]
+    dwdz = x_[:,1:,:-1,:-1,2] - x_[:,:-1,:-1,:-1,2]
+    div = dudx + dvdy + dwdz
+
+    div_ = np.sum(div, axis=(1,2,3))
+    print(div_)
+
     x_ = (x_+1)*127.5 # [0, 255]
     x_ = np.mean(x_, axis=1) # yx
     save_image(x_, '{}/x_fixed.png'.format(config.model_dir))
@@ -412,7 +420,7 @@ if __name__ == "__main__":
     setattr(config, 'is_3d', True)
     setattr(config, 'batch_size', 8)
 
-    setattr(config, 'dataset', 'cmag_dataset')
+    setattr(config, 'dataset', 'mpem_synthetic')
     setattr(config, 'res_x', 16)
     setattr(config, 'res_y', 16)
     setattr(config, 'res_z', 16)
