@@ -4,8 +4,9 @@ from scipy.interpolate import Rbf
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from tqdm import trange
+from util import create_test_train_indices
 
-cmag_dir = os.path.join('data', 'cmag_dataset_ns')
+cmag_dir = os.path.join('data', 'cmag_dataset_')
 cmag_path = os.path.join(cmag_dir, 'master_feature_matrix_v3.npy')
 data = np.load(cmag_path)
 nrow = 119
@@ -17,10 +18,11 @@ print('data shape', data.shape)
 print('# pairs', n)
 
 # remove 10 % for testing
-n_test = int(0.1 * n)
-n_train = n - n_test
+idx_train, idx_test = create_test_train_indices(n, test_size=0.1,shuffle=True,seed=config.random_seed)
 
-print('training with %d samples testing with %d' % (n_train, n_test))
+print('training with %d samples testing with %d' % (len(idx_train), len(idx_test)))
+np.savetxt(os.path.join(cmag_dir,'idx_train.txt'), idx_train, fmt='%d')
+np.savetxt(os.path.join(cmag_dir,'idx_test.txt'), idx_test, fmt='%d')
 
 # # visualize
 # fig = plt.figure()
@@ -35,7 +37,6 @@ print('training with %d samples testing with %d' % (n_train, n_test))
 # ax.set_zlabel('Z Label')
 # plt.show()
 
-
 sampling = True
 res = 16
 args_file = os.path.join(cmag_dir, 'args.txt')
@@ -49,12 +50,12 @@ with open(args_file, 'w') as f:
     f.write('sampling: %d\n' % sampling)
 
 train_dir = os.path.join(cmag_dir, 'v')
-test_dir = os.path.join(cmag_dir, 'test')
+#test_dir = os.path.join(cmag_dir, 'test')
 
 if not os.path.exists(train_dir):
     os.makedirs(train_dir)
-if not os.path.exists(test_dir):
-    os.makedirs(test_dir)
+# if not os.path.exists(test_dir):
+    # os.makedirs(test_dir)
 
 # for regular grid interpolation
 if sampling:
@@ -130,9 +131,10 @@ for i in trange(n):
 
         x = np.stack((bx_, by_, bz_), axis=-1) 
     
-    if i < n_train:
-        file_path = os.path.join(train_dir, '%04d.npz' % i)
-    else:
-        file_path = os.path.join(test_dir, '%04d.npz' % i)
+    file_path = os.path.join(train_dir, '%04d.npz' % i)
+    # if i < n_train:
+        # file_path = os.path.join(train_dir, '%04d.npz' % i)
+    # else:
+        # file_path = os.path.join(test_dir, '%04d.npz' % i)
 
     np.savez_compressed(file_path, x=x, y=y)

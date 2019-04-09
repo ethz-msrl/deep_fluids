@@ -290,6 +290,19 @@ def receptive_field_size(c, k, s):
         print('%d: %d' % (c-1, rfs))
         return rf(rfs, k, s)
 
+def create_test_train_indices(n, test_size=0.1, shuffle=True, seed=123):
+    # remove 10 % for testing
+    n_test = int(test_size * n)
+    n_train = n - n_test
+    idx = np.arange(0,n)
+    if shuffle:
+        np.random.seed(seed)
+        np.random.shuffle(idx)
+
+    idx_train = idx[0:n_train]
+    idx_test = idx[n_train:]
+    return idx_train, idx_test
+
 if __name__ == '__main__':
     c, k, s = 4, 3, 2
     rfs = receptive_field_size(c, k, s)

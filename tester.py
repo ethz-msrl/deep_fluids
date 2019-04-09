@@ -87,9 +87,11 @@ class Tester(object):
             self.y_range.append([p_min, p_max])
             self.y_num.append(p_num)
 
-        self.paths = glob("{}/{}/*".format(self.root, config.test_path))
+        #self.paths = glob("{}/{}/*".format(self.root, config.test_path))
+        self.paths = glob("{}/{}/*".format(self.root, 'v'))
         assert(self.paths)
-        self.n_test = len(self.paths)
+        self.idx_test = np.loadtxt(os.path.join(self.root, config.test_idx),dtype=np.int)
+        self.n_test = len(self.idx_test)
 
         gpu_options = tf.GPUOptions(allow_growth=True)
         sess_config = tf.ConfigProto(allow_soft_placement=True,
@@ -123,7 +125,8 @@ class Tester(object):
         """
         ss_res = 0
         ss_tot = 0
-        for i, path in enumerate(tqdm(self.paths)):
+        for i, idx in enumerate(tqdm(self.idx_test)):
+            path = self.paths[idx] 
             x, y = preprocess(path, self.data_type, self.x_range,
                     self.y_range)
             xd, _ = self.denorm(x.copy())
@@ -141,7 +144,8 @@ class Tester(object):
             ss_res += a; ss_tot += b
             rmse = np.sqrt(a/np.prod(x.shape[:-1:]))
             r2 = np.ones((xd.shape[-1]), np.float) - a / b 
-            print('%d r2: %s, max current: %f' % (i, r2, np.max(np.abs(y))*35))
+            # verbose printing
+            #print('%d r2: %s, max current: %f' % (i, r2, np.max(np.abs(y))*35))
             np.savetxt(os.path.join(self.stats_dir, '{:03d}.stats'.format(i)), 
                     np.vstack((r2, rmse)))
 

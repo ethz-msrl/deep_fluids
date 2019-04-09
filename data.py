@@ -18,6 +18,9 @@ class BatchManager(object):
         self.rng = np.random.RandomState(config.random_seed)
         self.root = config.data_path        
 
+        # this file controls which of the samples are used for training
+        self.idx_train = np.loadtxt(os.path.join(self.root, config.train_idx),dtype=np.int)
+
         # read data generation arguments
         self.args = {}
         with open(os.path.join(self.root, 'args.txt'), 'r') as f:
@@ -35,15 +38,16 @@ class BatchManager(object):
                 n = os.path.basename(x)[:-4].split('_')
                 return int(n[0])*nf + int(n[1])
 
-            self.paths = sorted(glob("{}/{}/*".format(self.root, config.data_type[0])),
+            all_paths = sorted(glob("{}/{}/*".format(self.root, config.data_type[0])),
                                 key=sortf)
             # num_path = len(self.paths)          
             # num_train = int(num_path*0.95)
             # self.test_paths = self.paths[num_train:]
             # self.paths = self.paths[:num_train]
         else:
-            self.paths = sorted(glob("{}/{}/*".format(self.root, config.data_type[0])))
+            all_paths = sorted(glob("{}/{}/*".format(self.root, config.data_type[0])))
         
+        self.paths = np.array(all_paths)[self.idx_train]
         self.num_samples = len(self.paths)
         assert(self.num_samples > 0)
         self.batch_size = config.batch_size
