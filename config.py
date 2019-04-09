@@ -3,6 +3,8 @@ import argparse
 def str2bool(v):
     return v.lower() in ('true', '1')
 
+DATASET = 'cmag_dataset'
+
 arg_lists = []
 parser = argparse.ArgumentParser()
 
@@ -36,7 +38,7 @@ net_arg.add_argument('--w_size', type=int, default=5)
 
 # Data
 data_arg = add_argument_group('Data')
-data_arg.add_argument('--dataset', type=str, default='cmag_dataset')
+data_arg.add_argument('--dataset', type=str, default=DATASET)
 data_arg.add_argument('--batch_size', type=int, default=8)
 data_arg.add_argument('--test_batch_size', type=int, default=8)
 data_arg.add_argument('--num_worker', type=int, default=1)
@@ -46,7 +48,7 @@ data_arg.add_argument('--data_type', type=str, default='velocity')
 train_arg = add_argument_group('Training')
 train_arg.add_argument('--is_train', type=str2bool, default=True)
 train_arg.add_argument('--start_step', type=int, default=0)
-train_arg.add_argument('--max_epoch', type=int, default=100)
+train_arg.add_argument('--max_epoch', type=int, default=120)
 train_arg.add_argument('--lr_update_step', type=int, default=120000)
 train_arg.add_argument('--lr_max', type=float, default=0.0001)
 train_arg.add_argument('--lr_min', type=float, default=0.0000025)
@@ -60,8 +62,8 @@ test_arg = add_argument_group('Testing')
 test_arg.add_argument('--test_size', type=float, default=0.1)
 test_arg.add_argument('--test_path', type=str, default='test')
 test_arg.add_argument('--load_model_dir', type=str, default='')
-test_arg.add_argument('--load_data_path', type=str, default='data/cmag_dataset')
-test_arg.add_argument('--generate_streamplots', type=bool, default=False)
+test_arg.add_argument('--load_data_path', type=str, default='data/' + DATASET)
+test_arg.add_argument('--generate_streamplots', action='store_true') 
 
 # Misc
 misc_arg = add_argument_group('Misc')
@@ -73,7 +75,7 @@ misc_arg.add_argument('--code_path', type=str, default='')
 misc_arg.add_argument('--log_step', type=int, default=500)
 misc_arg.add_argument('--test_step', type=int, default=1000)
 misc_arg.add_argument('--save_sec', type=int, default=3600)
-misc_arg.add_argument('--random_seed', type=int, default=123)
+misc_arg.add_argument('--random_seed', type=int, default=321)
 misc_arg.add_argument('--gpu_id', type=str, default='0')
 
 def get_config():

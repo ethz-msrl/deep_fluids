@@ -272,7 +272,7 @@ def curl(x, data_format='NHWC'):
 
     if data_format == 'NCHW': c = nhwc_to_nchw(c)
     return c
-    
+
 def divergence(x, data_format='NHWC'):
     if data_format == 'NCHW': x = nchw_to_nhwc(x)
 

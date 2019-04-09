@@ -352,7 +352,8 @@ def test3d(config):
     dvdy = x__[:,:-1,1:,:-1,1] - x__[:,:-1,:-1,:-1,1]
     dwdz = x__[:,1:,:-1,:-1,2] - x__[:,:-1,:-1,:-1,2]
     div = dudx + dvdy + dwdz
-    div_ = np.sum(div, axis=(1,2,3))
+    div_ = np.mean(div, axis=(1,2,3))
+    #div_ = np.sum(div, axis=(1,2,3))
     print(div_)
 
     x_ = (x_+1)*127.5 # [0, 255]
@@ -421,9 +422,9 @@ if __name__ == "__main__":
     setattr(config, 'batch_size', 8)
 
     setattr(config, 'dataset', 'mpem_synthetic')
-    setattr(config, 'res_x', 16)
-    setattr(config, 'res_y', 16)
-    setattr(config, 'res_z', 16)
+    setattr(config, 'res_x', 32)
+    setattr(config, 'res_y', 32)
+    setattr(config, 'res_z', 32)
 
     test3d(config)
     # ##############

@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from tqdm import trange
 
-cmag_dir = os.path.join('data', 'cmag_dataset')
-cmag_path = os.path.join(cmag_dir, 'master_feature_matrix_v2.npy')
+cmag_dir = os.path.join('data', 'cmag_dataset_ns')
+cmag_path = os.path.join(cmag_dir, 'master_feature_matrix_v3.npy')
 data = np.load(cmag_path)
 nrow = 119
 n = data.shape[0] // nrow 
@@ -69,7 +69,7 @@ if sampling:
     px = np.linspace(bbox[0], bbox[1], res) 
     py = np.linspace(bbox[2], bbox[3], res) 
     pz = np.linspace(bbox[4], bbox[5], res) 
-    px_, py_, pz_ = np.meshgrid(px, py, pz)
+    pz_, py_, px_ = np.meshgrid(pz, py, px, indexing='ij')
 
 for i in trange(n):
     y = data[i*nrow,3:-3]

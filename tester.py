@@ -12,7 +12,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from model import GeneratorBE3
-from ops import get_conv_shape, show_all_variables
+from ops import get_conv_shape, show_all_variables, divergence3, jacobian3
 from util import prepare_dirs_and_logger
 
 class Tester(object):
@@ -54,6 +54,8 @@ class Tester(object):
         
         assert(config.arch == 'de')
         assert(config.is_3d)
+
+        self.use_c = config.use_curl
 
         self.res_x = config.res_x
         self.res_y = config.res_y
@@ -125,26 +127,46 @@ class Tester(object):
             x, y = preprocess(path, self.data_type, self.x_range,
                     self.y_range)
             xd, _ = self.denorm(x.copy())
-            G_ = self.sess.run(self.G_, {self.z: y})  
+            # x_div = divergence3_np(xd)
+            # print('divergence max: %f mean:% f' % (np.max(x_div), np.mean(x_div)))
+            if self.use_c:
+                _, G_s = jacobian3(self.G_)
+                G_ = self.sess.run(G_s, {self.z: y})  
+                
+            else:
+                G_ = self.sess.run(self.G_, {self.z: y})  
             G_, _ = self.denorm(x=G_)
             G_ = np.squeeze(G_)
             a, b = compute_ss(xd, G_)
             ss_res += a; ss_tot += b
             rmse = np.sqrt(a/np.prod(x.shape[:-1:]))
             r2 = np.ones((xd.shape[-1]), np.float) - a / b 
+            print('%d r2: %s, max current: %f' % (i, r2, np.max(np.abs(y))*35))
             np.savetxt(os.path.join(self.stats_dir, '{:03d}.stats'.format(i)), 
                     np.vstack((r2, rmse)))
 
             if self.generate_streamplots:
                 self.streamplot_slice(x, G_, 'xy_{:03d}.png'.format(i))
-        r2_t = np.ones((xd.shape[-1]), np.float) - ss_res / ss_tot
-        T = len(self.paths) * np.prod(x.shape[:-1:])
-        rmse_t = np.sqrt(ss_res / T)
-        print('r2: %s' % r2_t)
-        print('rmse: %s mT' % (1000*rmse_t))
+
+            if ((i-1) % 20) == 0: 
+                r2_t = np.ones((xd.shape[-1]), np.float) - ss_res / ss_tot
+                T = i * np.prod(x.shape[:-1:])
+                rmse_t = np.sqrt(ss_res / T)
+                print('r2: %s' % r2_t)
+                print('rmse: %s mT' % (1000*rmse_t))
 
         save_path = os.path.join(self.model_fn + '.test_stats')
-        np.savetxt(save_path, np.vstack((r2, rmse)))
+        np.savetxt(save_path, np.vstack((r2_t, rmse_t)))
+
+    def test_single(self, path):
+        x, y = preprocess(path, self.data_type, self.x_range,
+                self.y_range)
+        xd, _ = self.denorm(x.copy())
+        G_ = self.sess.run(self.G_, {self.z: y})  
+        G_, _ = self.denorm(x=G_)
+        G_ = np.squeeze(G_)
+        print('saving to %s.test' % path)
+        np.savez_compressed(path + '.test', x=G_)
 
     def streamplot_slice(self, x, x_, filename):
         assert(x.shape == x_.shape)
@@ -231,6 +253,8 @@ def streamplot2(x, x_, filename, density=1.5, scale=50.):
     streamplot(x, ax1, density, scale)
     streamplot(x_, ax2, density, scale)
     fig.savefig(filename, bbox_inches='tight')
+    #fig.clf()
+    plt.close(fig)
 
 def streamplot(x, ax, density=2.0, scale=50.0):
     # uv: [y,x,2]
@@ -258,11 +282,18 @@ def streamplot(x, ax, density=2.0, scale=50.0):
     ax.axes.get_xaxis().set_visible(False)
     ax.axes.get_yaxis().set_visible(False)
 
+def divergence3_np(x):
+    dudx = x[:-1,:-1,1:,0] - x[:-1,:-1,:-1,0]
+    dvdy = x[:-1,1:,:-1,1] - x[:-1,:-1,:-1,1]
+    dwdz = x[1:,:-1,:-1,2] - x[:-1,:-1,:-1,2]
+    return dudx + dvdy + dwdz
 
 if __name__ == '__main__':
     from config import get_config
     config, unparsed = get_config()
 
     tester = Tester(config)
+    #paths = glob("{}/{}/*".format(config.load_data_path, config.test_path))
+    #tester.test_single(paths[0])
     tester.test()
 
