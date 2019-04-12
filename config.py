@@ -46,7 +46,7 @@ data_arg.add_argument('--data_type', type=str, default='velocity')
 
 # Training / test parameters
 train_arg = add_argument_group('Training')
-train_arg.add_argument('--train_idx', type=str, default='12345_train.txt')
+train_arg.add_argument('--train_idx', type=str, default='123_train.txt')
 train_arg.add_argument('--is_train', type=str2bool, default=True)
 train_arg.add_argument('--start_step', type=int, default=0)
 train_arg.add_argument('--max_epoch', type=int, default=100)
@@ -60,7 +60,7 @@ train_arg.add_argument('--lr_update', type=str, default='decay',
                        choices=['decay', 'step'])
 
 test_arg = add_argument_group('Testing')
-test_arg.add_argument('--test_idx', type=str, default='12345_test.txt')
+test_arg.add_argument('--test_idx', type=str, default='123_test.txt')
 test_arg.add_argument('--test_path', type=str, default='test')
 test_arg.add_argument('--load_model_dir', type=str, default='')
 test_arg.add_argument('--load_data_path', type=str, default='data/' + DATASET)
@@ -69,7 +69,7 @@ test_arg.add_argument('--generate_streamplots', action='store_true')
 # Misc
 misc_arg = add_argument_group('Misc')
 misc_arg.add_argument('--log_dir', type=str, default='log')
-misc_arg.add_argument('--tag', type=str, default='tag')
+misc_arg.add_argument('--tag', type=str, default='123')
 misc_arg.add_argument('--data_dir', type=str, default='data')
 misc_arg.add_argument('--load_path', type=str, default='')
 misc_arg.add_argument('--code_path', type=str, default='')
