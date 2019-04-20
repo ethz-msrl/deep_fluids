@@ -123,8 +123,13 @@ class Tester(object):
         """
         Runs the tests
         """
+        # residual sum of squares
         ss_res = 0
+        # total sum of squares
         ss_tot = 0
+        # res sum of abs
+        sa_res = 0
+        
         for i, idx in enumerate(tqdm(self.idx_test)):
             path = self.paths[idx] 
             x, y = preprocess(path, self.data_type, self.x_range,
@@ -144,9 +149,14 @@ class Tester(object):
             ss_res += a; ss_tot += b
             rmse = np.sqrt(a/np.prod(x.shape[:-1:]))
             r2 = np.ones((xd.shape[-1]), np.float) - a / b 
+            mae = compute_mae(xd, G_)
+            sa_res += mae * np.prod(x.shape[:-1:])
+
             # verbose printing
-            #print('%d r2: %s, max current: %f' % (i, r2, np.max(np.abs(y))*35))
-            np.savetxt(os.path.join(self.stats_dir, '{:03d}.stats'.format(i)), 
+            #print('%d r2: %s, max current: %f' % (idx, r2, np.max(np.abs(y))*35))
+            #print('%d mae: %s (mT)' % (idx, 1000*mae))
+
+            np.savetxt(os.path.join(self.stats_dir, '{:03d}.stats'.format(idx)), 
                     np.vstack((r2, rmse)))
 
             if self.generate_streamplots:
@@ -156,11 +166,13 @@ class Tester(object):
                 r2_t = np.ones((xd.shape[-1]), np.float) - ss_res / ss_tot
                 T = i * np.prod(x.shape[:-1:])
                 rmse_t = np.sqrt(ss_res / T)
+                mae_t = sa_res / T
                 print('r2: %s' % r2_t)
                 print('rmse: %s mT' % (1000*rmse_t))
+                print('mae: %s mT' % (1000*mae_t))
 
         save_path = os.path.join(self.model_fn + '.test_stats')
-        np.savetxt(save_path, np.vstack((r2_t, rmse_t)))
+        np.savetxt(save_path, np.vstack((r2_t, rmse_t, mae_t)))
 
     def test_single(self, path):
         x, y = preprocess(path, self.data_type, self.x_range,
@@ -169,8 +181,8 @@ class Tester(object):
         G_ = self.sess.run(self.G_, {self.z: y})  
         G_, _ = self.denorm(x=G_)
         G_ = np.squeeze(G_)
-        print('saving to %s.test' % path)
-        np.savez_compressed(path + '.test', x=G_)
+        print('saving to %s.test' % os.path.basename(path))
+        np.savez_compressed(os.path.basename(path) + '.test', x=G_)
 
     def streamplot_slice(self, x, x_, filename):
         assert(x.shape == x_.shape)
@@ -205,6 +217,28 @@ def compute_ss(obs, pred):
     obs_m = np.mean(obs, axis=d_r)
     ss_tot = np.sum(np.square(obs - obs_m), d_r)
     return ss_res, ss_tot
+
+def compute_mae(obs, pred):
+    """
+    Computes the mean absolute error 
+
+    mae = mean(|obs - pred|)
+
+    The tensors are reduced on all axes except the last
+    For example a tensor of size [8,8,8,3] will result in a 
+    vector of length 3
+
+    Args:
+        obs: a tensor of observed values
+        pred: a tensor the same size as pred of predicted values
+    Returns:
+        np.ndarray of length 3 with the mae 
+    """
+    assert(obs.shape == pred.shape)
+    # dims to reduce
+    d_r = tuple(range(obs.ndim-1))
+    return np.mean(np.abs(obs - pred), axis=d_r)
+
 
 def compute_r2(obs, pred):
     """
@@ -298,6 +332,6 @@ if __name__ == '__main__':
 
     tester = Tester(config)
     #paths = glob("{}/{}/*".format(config.load_data_path, config.test_path))
-    #tester.test_single(paths[0])
+    #tester.test_single('data/cmag_dataset_/v/0853.npz')
     tester.test()
 
