@@ -63,8 +63,9 @@ class Trainer(object):
 
         self.start_step = config.start_step
         self.step = tf.Variable(self.start_step, name='step', trainable=False)
-        # self.max_step = config.max_step
-        self.max_step = int(config.max_epoch // batch_manager.epochs_per_step)
+        # uncomment this for the training split size experiment
+        self.max_step = config.max_step
+        #self.max_step = int(config.max_epoch // batch_manager.epochs_per_step)
 
         self.lr_update = config.lr_update
         if self.lr_update == 'decay':
