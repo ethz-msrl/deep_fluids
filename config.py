@@ -3,7 +3,7 @@ import argparse
 def str2bool(v):
     return v.lower() in ('true', '1')
 
-DATASET = 'cmag_dataset_'
+DATASET = 'cmag_dataset'
 
 arg_lists = []
 parser = argparse.ArgumentParser()
@@ -46,10 +46,11 @@ data_arg.add_argument('--data_type', type=str, default='velocity')
 
 # Training / test parameters
 train_arg = add_argument_group('Training')
-train_arg.add_argument('--train_idx', type=str, default='123_train.txt')
+train_arg.add_argument('--train_idx', type=str, default='idx_train.txt')
 train_arg.add_argument('--is_train', type=str2bool, default=True)
 train_arg.add_argument('--start_step', type=int, default=0)
 train_arg.add_argument('--max_epoch', type=int, default=100)
+train_arg.add_argument('--max_step', type=int, default=35000)
 train_arg.add_argument('--lr_update_step', type=int, default=120000)
 train_arg.add_argument('--lr_max', type=float, default=0.0001)
 train_arg.add_argument('--lr_min', type=float, default=0.0000025)
@@ -60,11 +61,12 @@ train_arg.add_argument('--lr_update', type=str, default='decay',
                        choices=['decay', 'step'])
 
 test_arg = add_argument_group('Testing')
-test_arg.add_argument('--test_idx', type=str, default='123_test.txt')
+test_arg.add_argument('--test_idx', type=str, default='idx_test.txt')
 test_arg.add_argument('--test_path', type=str, default='test')
 test_arg.add_argument('--load_model_dir', type=str, default='')
 test_arg.add_argument('--load_data_path', type=str, default='data/' + DATASET)
 test_arg.add_argument('--generate_streamplots', action='store_true') 
+test_arg.add_argument('--save_data_path', type=str, default = 'test/' + DATASET)
 
 # Misc
 misc_arg = add_argument_group('Misc')

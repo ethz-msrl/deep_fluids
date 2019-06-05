@@ -6,8 +6,8 @@ from mpl_toolkits.mplot3d import Axes3D
 from tqdm import trange
 from util import create_test_train_indices
 
-cmag_dir = os.path.join('data', 'cmag_dataset_')
-cmag_path = os.path.join(cmag_dir, 'master_feature_matrix_v3.npy')
+cmag_dir = os.path.join('data', 'cmag_dataset')
+cmag_path = os.path.join(cmag_dir, 'master_feature_matrix_v5.npy')
 data = np.load(cmag_path)
 nrow = 119
 n = data.shape[0] // nrow 
@@ -18,7 +18,7 @@ print('data shape', data.shape)
 print('# pairs', n)
 
 # remove 10 % for testing
-idx_train, idx_test = create_test_train_indices(n, test_size=0.1,shuffle=True,seed=config.random_seed)
+idx_train, idx_test = create_test_train_indices(n, test_size=0.1,shuffle=True,seed=123)
 
 print('training with %d samples testing with %d' % (len(idx_train), len(idx_test)))
 np.savetxt(os.path.join(cmag_dir,'idx_train.txt'), idx_train, fmt='%d')

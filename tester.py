@@ -29,6 +29,13 @@ class Tester(object):
         self.root = config.load_data_path        
 
         self.model_dir = config.load_model_dir
+        assert(self.model_dir)
+
+        # will save the inferred field to npz files
+        self.save_output = False 
+        self.save_path = os.path.join(config.save_data_path, 'v')
+        assert(os.path.isdir(self.save_path))
+
         self.generate_streamplots = config.generate_streamplots
         if self.generate_streamplots:
             self.streamplots_dir = os.path.join(self.model_dir, 'streamplots')
@@ -38,8 +45,11 @@ class Tester(object):
         self.stats_dir = os.path.join(self.model_dir, 'stats')
         if not os.path.exists(self.stats_dir):
             os.makedirs(self.stats_dir)
+        else:
+            filelist = [ f for f in os.listdir(self.stats_dir) if f.endswith(".stats") ]
+            for f in filelist:
+                os.remove(os.path.join(self.stats_dir, f))
 
-        assert(self.model_dir)
 
         # read data generation arguments
         self.args = {}
@@ -87,8 +97,7 @@ class Tester(object):
             self.y_range.append([p_min, p_max])
             self.y_num.append(p_num)
 
-        #self.paths = glob("{}/{}/*".format(self.root, config.test_path))
-        self.paths = glob("{}/{}/*".format(self.root, 'v'))
+        self.paths = sorted(glob("{}/{}/*".format(self.root, 'v')))
         assert(self.paths)
         self.idx_test = np.loadtxt(os.path.join(self.root, config.test_idx),dtype=np.int)
         self.n_test = len(self.idx_test)
@@ -101,7 +110,7 @@ class Tester(object):
         self.z = tf.placeholder(dtype=tf.float32, shape=(self.test_b_num, self.c_num))
         self.G_, _ = GeneratorBE3(self.z, self.filters, self.output_shape,
                                  num_conv=self.num_conv, repeat=self.repeat, reuse=False)
-        self.saver= tf.train.Saver()
+        self.saver = tf.train.Saver()
         self.model_fn = tf.train.latest_checkpoint(self.model_dir)
         assert(self.model_fn)
         self.saver.restore(self.sess, self.model_fn) 
@@ -132,6 +141,7 @@ class Tester(object):
         
         for i, idx in enumerate(tqdm(self.idx_test)):
             path = self.paths[idx] 
+            assert(int(os.path.basename(path).split('.')[0]) == idx)
             x, y = preprocess(path, self.data_type, self.x_range,
                     self.y_range)
             xd, _ = self.denorm(x.copy())
@@ -145,6 +155,11 @@ class Tester(object):
                 G_ = self.sess.run(self.G_, {self.z: y})  
             G_, _ = self.denorm(x=G_)
             G_ = np.squeeze(G_)
+
+            # save the output
+            if self.save_output:
+                np.savez_compressed(os.path.join(self.save_path, '%04d' % idx), x=G_, y=y)
+
             a, b = compute_ss(xd, G_)
             ss_res += a; ss_tot += b
             rmse = np.sqrt(a/np.prod(x.shape[:-1:]))
@@ -156,11 +171,11 @@ class Tester(object):
             #print('%d r2: %s, max current: %f' % (idx, r2, np.max(np.abs(y))*35))
             #print('%d mae: %s (mT)' % (idx, 1000*mae))
 
-            np.savetxt(os.path.join(self.stats_dir, '{:03d}.stats'.format(idx)), 
+            np.savetxt(os.path.join(self.stats_dir, '{:04d}.stats'.format(idx)), 
                     np.vstack((r2, rmse)))
 
             if self.generate_streamplots:
-                self.streamplot_slice(x, G_, 'xy_{:03d}.png'.format(i))
+                self.streamplot_slice(x, G_, 'xy_{:04d}.png'.format(idx))
 
             if ((i-1) % 20) == 0: 
                 r2_t = np.ones((xd.shape[-1]), np.float) - ss_res / ss_tot
@@ -332,6 +347,6 @@ if __name__ == '__main__':
 
     tester = Tester(config)
     #paths = glob("{}/{}/*".format(config.load_data_path, config.test_path))
-    #tester.test_single('data/cmag_dataset_/v/0853.npz')
+    #tester.test_single('data/cmag_dataset_/v/0188.npz')
     tester.test()
 

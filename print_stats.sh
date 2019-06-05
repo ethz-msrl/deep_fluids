@@ -15,13 +15,19 @@ read_stats_file() {
     r2line=$(head -n 1 $1)
     printf "r2: "
     for a in $r2line; do
-        printf "%0.3f " "$a"
+        printf "%0.4f " "$a"
     done
     printf "\n"
-    rmseline=$(cat $1 | tail -n 1)
+    rmseline=$(sed '2q;d' $1) 
     printf "RMSE (mT): "
     for a in $rmseline ; do
-        awk '{printf "%2.1f ", 1000 * $0}' <<< "$a"
+        awk '{printf "%2.3f ", 1000 * $0}' <<< "$a"
+    done
+    printf "\n"
+    maeline=$(cat $1 | tail -n 1)
+    printf "MAE (mT): "
+    for a in $maeline; do
+        awk '{printf "%2.3f ", 1000 * $0}' <<< "$a"
     done
     printf "\n\n"
 }
