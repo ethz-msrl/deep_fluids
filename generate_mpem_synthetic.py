@@ -3,6 +3,7 @@ import numpy as np
 import os
 from tqdm import trange
 from mpem import ElectromagnetCalibration
+from mag_utils import grad5_to_grad33
 import h5py
 
 def get_positions(resolution, 
@@ -23,6 +24,14 @@ def divergence3(x, STEP=1.):
         dwdz = (x[1:,:-1,:-1,2,:] - x[:-1,:-1,:-1,2,:])/STEP
         return dudx + dvdy + dwdz
 
+def release_list(l):
+    """
+    This frees list l from memory immediately
+    """
+
+    del l[:]
+    del l
+
 if __name__ == '__main__':
     cal = ElectromagnetCalibration('/home/samuelch/tesla_ws/src/mag_control/mpem/cal/C_Mag_Calibration_06-25-2015.yaml')
     currents = np.loadtxt('/home/samuelch/datasets/cmag_calibration/currents_3787.csv')
@@ -40,6 +49,7 @@ if __name__ == '__main__':
             noise to the field data with the following standard deviation in T')
     parser.add_argument('--no_save', '-n', action='store_true', help='do not save data')
     parser.add_argument('--use_hdf5', action='store_true')
+    parser.add_argument('--gradients', action='store_true', help='compute gradients instead of fields')
     parser.add_argument('dataset_dir', type=str)
     args = parser.parse_args()
 
@@ -60,17 +70,26 @@ if __name__ == '__main__':
     b_min = 0; b_max = np.inf
 
     print('Calculating actuation matrices')
-    act_mats = [] 
-    for i in trange(Np):
-        act_mats.append(cal.fieldCurrentJacobian(np.array([xd[i], yd[i], zd[i]])))
+    field_act_mats = [] 
+    grad_act_mats = []
+    if args.gradients:
+        # calculating both field and gradient actuation matrices
+        for i in trange(Np):
+            act_mat = cal.fieldAndGradientCurrentJacobian(np.array([xd[i], yd[i], zd[i]]))
+            field_act_mats.append(act_mat[0:3,:])
+            grad_act_mats.append(act_mat[3:,:])
+    else:
+        for i in trange(Np):
+            field_act_mats.append(cal.fieldCurrentJacobian(np.array([xd[i], yd[i], zd[i]])))
 
-    act_matx = np.array(act_mats)
-    act_matx = np.reshape(act_mats, (args.resolution, args.resolution, args.resolution, 3, 8)) 
-    # releasing the list from memory
-    del act_mats[:]
-    del act_mats
+    #field_act_matx = np.array(field_act_mats)
+    field_act_matx = np.reshape(field_act_mats, (args.resolution, args.resolution, args.resolution, 3, 8)) 
+    release_list(field_act_mats)
 
-    fields = act_matx.dot(currents.T)
+    fields = field_act_matx.dot(currents.T)
+
+    # freeing actuation matrices
+    field_act_matx = None
 
     if args.noise_std:
         print('Adding noise')
@@ -79,13 +98,28 @@ if __name__ == '__main__':
     b_min = np.min(fields)
     b_max = np.max(fields)
 
+    if args.gradients:
+        #grad_act_matx = np.array(grad_act_mats)
+        grad_act_matx = np.reshape(grad_act_mats, (args.resolution, args.resolution, args.resolution, 5, 8))
+        release_list(grad_act_mats)
+
+        gradient5s = grad_act_matx.dot(currents.T)
+
+        gradient5s = gradient5s.transpose((4,0,1,2,3))
+        
+        # freeing actuation matrices
+        grad_act_matx = None
+
+        gradients = grad5_to_grad33(np.reshape(gradient5s, (-1, 5)))
+        gradient5s = None
+        gradients = gradients.reshape((Nc, args.resolution, args.resolution, args.resolution, 3, 3))
+
     if args.print_div:
         div3 = divergence3(fields, step)
         print('divergence mean: %f, max: %f, min: %f' % (np.mean(div3), np.max(div3), np.min(div3)))
 
     if not args.no_save:
         dataset_dir = args.dataset_dir
-        #dataset_dir = ('/home/samuelch/src/deep-fluids/data/mpem_synthetic_%d' % args.resolution)
         if not os.path.exists(dataset_dir):
             os.makedirs(dataset_dir)
         train_dir  = os.path.join(dataset_dir, 'v')
@@ -126,6 +160,10 @@ if __name__ == '__main__':
                 filepath += '.h5'
                 with h5py.File(filepath, 'w') as hf:
                     hf.create_dataset('fields', data=x)
+                    if args.gradients:
+                        # indices is current, x, y, z, 3, 3
+                        g = gradients[i,:,:,:,:,:]
+                        hf.create_dataset('gradients', data=g)
             else:
                 filepath += '.npz'
                 np.savez_compressed(filepath, x=x, y=currents[i,:])
