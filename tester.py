@@ -138,6 +138,8 @@ class Tester(object):
         ss_tot = 0
         # res sum of abs
         sa_res = 0
+        # res sum of percent abs error
+        spa_res = 0
         
         for i, idx in enumerate(tqdm(self.idx_test)):
             path = self.paths[idx] 
@@ -164,8 +166,11 @@ class Tester(object):
             ss_res += a; ss_tot += b
             rmse = np.sqrt(a/np.prod(x.shape[:-1:]))
             r2 = np.ones((xd.shape[-1]), np.float) - a / b 
-            mae = compute_mae(xd, G_)
-            sa_res += mae * np.prod(x.shape[:-1:])
+            mae, nmae = compute_mae(xd, G_)
+            # number of points in grid
+            N = np.prod(x.shape[:-1:])
+            sa_res += mae * N
+            spa_res += nmae * N
 
             # verbose printing
             #print('%d r2: %s, max current: %f' % (idx, r2, np.max(np.abs(y))*35))
@@ -182,12 +187,14 @@ class Tester(object):
                 T = i * np.prod(x.shape[:-1:])
                 rmse_t = np.sqrt(ss_res / T)
                 mae_t = sa_res / T
+                nmae_t = spa_res / T
                 print('r2: %s' % r2_t)
                 print('rmse: %s mT' % (1000*rmse_t))
                 print('mae: %s mT' % (1000*mae_t))
+                print('nmae: %s %%' % nmae_t)
 
         save_path = os.path.join(self.model_fn + '.test_stats')
-        np.savetxt(save_path, np.vstack((r2_t, rmse_t, mae_t)))
+        np.savetxt(save_path, np.vstack((r2_t, rmse_t, mae_t, nmae_t)))
 
     def test_single(self, path):
         x, y = preprocess(path, self.data_type, self.x_range,
@@ -247,12 +254,14 @@ def compute_mae(obs, pred):
         obs: a tensor of observed values
         pred: a tensor the same size as pred of predicted values
     Returns:
-        np.ndarray of length 3 with the mae 
+        tuple (np.ndarray of length 3 with the MAE, np.ndarray of length 3 with MAE normalized to mean
+        absolute observation values in percent)
     """
     assert(obs.shape == pred.shape)
     # dims to reduce
     d_r = tuple(range(obs.ndim-1))
-    return np.mean(np.abs(obs - pred), axis=d_r)
+    mae = np.mean(np.abs(obs - pred), axis=d_r)
+    return mae, 100 * mae / np.mean(np.abs(obs), axis=d_r)
 
 
 def compute_r2(obs, pred):
