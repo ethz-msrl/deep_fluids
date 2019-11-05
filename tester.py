@@ -32,7 +32,7 @@ class Tester(object):
         assert(self.model_dir)
 
         # will save the inferred field to npz files
-        self.save_output = False 
+        self.save_output = True
         self.save_path = os.path.join(config.save_data_path, 'v')
         assert(os.path.isdir(self.save_path))
 

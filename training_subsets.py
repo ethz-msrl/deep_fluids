@@ -20,7 +20,8 @@ for split in splits:
     config, unparset = get_config()
 
     config.train_idx = os.path.basename(fn)
-    config.tag = ('ss_%d' % (100 * split))
+    config.tag = ('divfree_ss_%d' % (100 * split))
+    config.use_curl = True
     print('training with %d %% of the training set' % (100 * split))
     main(config)
 
