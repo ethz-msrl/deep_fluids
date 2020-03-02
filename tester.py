@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from model import GeneratorBE3
 from ops import get_conv_shape, show_all_variables, divergence3, jacobian3
 from util import prepare_dirs_and_logger
+import time
 
 class Tester(object):
     def __init__(self, config):
@@ -32,7 +33,7 @@ class Tester(object):
         assert(self.model_dir)
 
         # will save the inferred field to npz files
-        self.save_output = True
+        self.save_output = False
         self.save_path = os.path.join(config.save_data_path, 'v')
         assert(os.path.isdir(self.save_path))
 
@@ -140,10 +141,13 @@ class Tester(object):
         sa_res = 0
         # res sum of percent abs error
         spa_res = 0
+
+        elapsed_l = []
         
         for i, idx in enumerate(tqdm(self.idx_test)):
             path = self.paths[idx] 
             assert(int(os.path.basename(path).split('.')[0]) == idx)
+            tick = time.clock()
             x, y = preprocess(path, self.data_type, self.x_range,
                     self.y_range)
             xd, _ = self.denorm(x.copy())
@@ -156,6 +160,9 @@ class Tester(object):
             else:
                 G_ = self.sess.run(self.G_, {self.z: y})  
             G_, _ = self.denorm(x=G_)
+            tock = time.clock()
+            elapsed_l.append(tock - tick)
+
             G_ = np.squeeze(G_)
 
             # save the output
@@ -193,8 +200,14 @@ class Tester(object):
                 print('mae: %s mT' % (1000*mae_t))
                 print('nmae: %s %%' % nmae_t)
 
+        # uncomment for original
         save_path = os.path.join(self.model_fn + '.test_stats')
+        
+        # making a modification to not overwrite the stats when getting the errors on the training data
+        #save_path = os.path.join(self.model_fn + '.train_stats')
         np.savetxt(save_path, np.vstack((r2_t, rmse_t, mae_t, nmae_t)))
+
+        print('fastest computation took {:1.2f} ms'.format(1000*np.min(elapsed_l)))
 
     def test_single(self, path):
         x, y = preprocess(path, self.data_type, self.x_range,
