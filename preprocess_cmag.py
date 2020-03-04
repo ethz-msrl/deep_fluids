@@ -1,12 +1,13 @@
 import os
 import numpy as np
 from scipy.interpolate import Rbf
+from matrix_rbf import DivFreeRBF
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from tqdm import trange
 from util import create_test_train_indices
 
-cmag_dir = os.path.join('data', 'cmag_dataset')
+cmag_dir = os.path.join('data', 'cmag_dataset_df')
 cmag_path = os.path.join(cmag_dir, 'master_feature_matrix_v5.npy')
 data = np.load(cmag_path)
 nrow = 119
@@ -39,6 +40,7 @@ np.savetxt(os.path.join(cmag_dir,'idx_test.txt'), idx_test, fmt='%d')
 
 sampling = True
 res = 16
+use_div_free = True
 args_file = os.path.join(cmag_dir, 'args.txt')
 with open(args_file, 'w') as f:
     f.write('num_param: 8\n')
@@ -50,7 +52,6 @@ with open(args_file, 'w') as f:
     f.write('sampling: %d\n' % sampling)
 
 train_dir = os.path.join(cmag_dir, 'v')
-#test_dir = os.path.join(cmag_dir, 'test')
 
 if not os.path.exists(train_dir):
     os.makedirs(train_dir)
@@ -79,22 +80,36 @@ for i in trange(n):
     b = data[i*nrow:(i+1)*nrow, -3:]
 
     # for interpolation on missing points
-    bx = Rbf(p[:,0], p[:,1], p[:,2], b[:,0])
-    by = Rbf(p[:,0], p[:,1], p[:,2], b[:,1])
-    bz = Rbf(p[:,0], p[:,1], p[:,2], b[:,2])
+    if use_div_free:
+        rbf = DivFreeRBF(p, b, kernel='multiquadric', eps=1., normalize=True)
+        p1 = p[62,:3] + p[62,:3] - p[38,:3]
+        b1 = rbf.evaluate_single(p1)
 
-    p1 = p[62,:3] + p[62,:3] - p[38,:3]
-    b1 = [bx(p1[0], p1[1], p1[2]), by(p1[0], p1[1], p1[2]), bz(p1[0], p1[1], p1[2])]
-    p = np.insert(p, 86, p1, axis=0)
-    b = np.insert(b, 86, b1, axis=0)
+        p = np.insert(p, 86, p1, axis=0)
+        b = np.insert(b, 86, b1, axis=0)
 
-    for j in range(97,0,-24):
-        p1 = p[j,:3] + p[j,:3] - p[j-1,:3]
+        for j in range(97,0,-24):
+            p1 = p[j,:3] + p[j,:3] - p[j-1,:3]
+            b1 = rbf.evaluate_single(p1)
+            p = np.insert(p, j+1, p1, axis=0)
+            b = np.insert(b, j+1, b1, axis=0)
+    else:
+        bx = Rbf(p[:,0], p[:,1], p[:,2], b[:,0])
+        by = Rbf(p[:,0], p[:,1], p[:,2], b[:,1])
+        bz = Rbf(p[:,0], p[:,1], p[:,2], b[:,2])
+
+        p1 = p[62,:3] + p[62,:3] - p[38,:3]
         b1 = [bx(p1[0], p1[1], p1[2]), by(p1[0], p1[1], p1[2]), bz(p1[0], p1[1], p1[2])]
-        p = np.insert(p, j+1, p1, axis=0)
-        b = np.insert(b, j+1, b1, axis=0)
+        p = np.insert(p, 86, p1, axis=0)
+        b = np.insert(b, 86, b1, axis=0)
 
-    # # debug
+        for j in range(97,0,-24):
+            p1 = p[j,:3] + p[j,:3] - p[j-1,:3]
+            b1 = [bx(p1[0], p1[1], p1[2]), by(p1[0], p1[1], p1[2]), bz(p1[0], p1[1], p1[2])]
+            p = np.insert(p, j+1, p1, axis=0)
+            b = np.insert(b, j+1, b1, axis=0)
+
+    # debug
     # fig = plt.figure()
     # ax = fig.add_subplot(111, projection='3d')
     # for j in range(125):
@@ -110,26 +125,33 @@ for i in trange(n):
     if not sampling:
         x = b.reshape([5,5,5,3])
     else:    
-        bx = Rbf(p[:,0], p[:,1], p[:,2], b[:,0])
-        by = Rbf(p[:,0], p[:,1], p[:,2], b[:,1])
-        bz = Rbf(p[:,0], p[:,1], p[:,2], b[:,2])
+        if use_div_free:
+            rbf = DivFreeRBF(p, b, kernel='multiquadric', eps=1., normalize=True)
+            pxf_ = px_.flatten(); pyf_ = py_.flatten(); pzf_ = pz_.flatten()
+            p_ = np.stack((pxf_, pyf_, pzf_), axis=-1)
+            x = rbf.evaluate(p_)
+            x = x.reshape((res, res, res, 3))
+        else:
+            bx = Rbf(p[:,0], p[:,1], p[:,2], b[:,0])
+            by = Rbf(p[:,0], p[:,1], p[:,2], b[:,1])
+            bz = Rbf(p[:,0], p[:,1], p[:,2], b[:,2])
 
-        bx_ = bx(px_, py_, pz_)
-        by_ = by(px_, py_, pz_)
-        bz_ = bz(px_, py_, pz_)
+            bx_ = bx(px_, py_, pz_)
+            by_ = by(px_, py_, pz_)
+            bz_ = bz(px_, py_, pz_)
 
-        # # debug
+            x = np.stack((bx_, by_, bz_), axis=-1) 
+        # debug
         # fig = plt.figure()
         # ax = fig.add_subplot(111, projection='3d')
         # ax.scatter(px_, py_, pz_)
+        # #import pdb; pdb.set_trace()
         # ax.quiver(px_, py_, pz_, \
-        #           bx_, by_, bz_, length=0.3)
+        #             x[:,:,:,0], x[:,:,:,1], x[:,:,:,2], length=0.3)
         # ax.set_xlabel('X Label')
         # ax.set_ylabel('Y Label')
         # ax.set_zlabel('Z Label')
         # plt.show()
-
-        x = np.stack((bx_, by_, bz_), axis=-1) 
     
     file_path = os.path.join(train_dir, '%04d.npz' % i)
     # if i < n_train:
