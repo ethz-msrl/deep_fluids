@@ -34,8 +34,9 @@ class Tester(object):
 
         # will save the inferred field to npz files
         self.save_output = False
-        self.save_path = os.path.join(config.save_data_path, 'v')
-        assert(os.path.isdir(self.save_path))
+        if self.save_output:
+            self.save_path = os.path.join(config.save_data_path, 'v')
+            assert(os.path.isdir(self.save_path))
 
         self.generate_streamplots = config.generate_streamplots
         if self.generate_streamplots:
