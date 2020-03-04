@@ -3,7 +3,7 @@ import argparse
 def str2bool(v):
     return v.lower() in ('true', '1')
 
-DATASET = 'cmag_dataset'
+DATASET = 'cmag_dataset_df'
 
 arg_lists = []
 parser = argparse.ArgumentParser()
