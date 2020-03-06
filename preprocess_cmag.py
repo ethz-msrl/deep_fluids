@@ -7,7 +7,12 @@ from mpl_toolkits.mplot3d import Axes3D
 from tqdm import trange
 from util import create_test_train_indices
 
-cmag_dir = os.path.join('data', 'cmag_dataset_df')
+# this is the kernel type for the regular 3D RBF only. 
+# for the div-free RBF the kernel is specified in the initialization of that interpolant
+rbf_kernel = 'multiquadric'
+use_div_free = False
+
+cmag_dir = os.path.join('data', 'cmag_dataset')
 cmag_path = os.path.join(cmag_dir, 'master_feature_matrix_v5.npy')
 data = np.load(cmag_path)
 nrow = 119
@@ -40,7 +45,6 @@ np.savetxt(os.path.join(cmag_dir,'idx_test.txt'), idx_test, fmt='%d')
 
 sampling = True
 res = 16
-use_div_free = True
 args_file = os.path.join(cmag_dir, 'args.txt')
 with open(args_file, 'w') as f:
     f.write('num_param: 8\n')
@@ -94,9 +98,9 @@ for i in trange(n):
             p = np.insert(p, j+1, p1, axis=0)
             b = np.insert(b, j+1, b1, axis=0)
     else:
-        bx = Rbf(p[:,0], p[:,1], p[:,2], b[:,0])
-        by = Rbf(p[:,0], p[:,1], p[:,2], b[:,1])
-        bz = Rbf(p[:,0], p[:,1], p[:,2], b[:,2])
+        bx = Rbf(p[:,0], p[:,1], p[:,2], b[:,0], function=rbf_kernel)
+        by = Rbf(p[:,0], p[:,1], p[:,2], b[:,1], function=rbf_kernel)
+        bz = Rbf(p[:,0], p[:,1], p[:,2], b[:,2], function=rbf_kernel)
 
         p1 = p[62,:3] + p[62,:3] - p[38,:3]
         b1 = [bx(p1[0], p1[1], p1[2]), by(p1[0], p1[1], p1[2]), bz(p1[0], p1[1], p1[2])]
@@ -132,9 +136,9 @@ for i in trange(n):
             x = rbf.evaluate(p_)
             x = x.reshape((res, res, res, 3))
         else:
-            bx = Rbf(p[:,0], p[:,1], p[:,2], b[:,0])
-            by = Rbf(p[:,0], p[:,1], p[:,2], b[:,1])
-            bz = Rbf(p[:,0], p[:,1], p[:,2], b[:,2])
+            bx = Rbf(p[:,0], p[:,1], p[:,2], b[:,0], function=rbf_kernel)
+            by = Rbf(p[:,0], p[:,1], p[:,2], b[:,1], function=rbf_kernel)
+            bz = Rbf(p[:,0], p[:,1], p[:,2], b[:,2], function=rbf_kernel)
 
             bx_ = bx(px_, py_, pz_)
             by_ = by(px_, py_, pz_)
