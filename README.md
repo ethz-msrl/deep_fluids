@@ -45,6 +45,38 @@ To test:
 
 Please take a closer look at `run.bat` for each dataset and other architectures.
 
+### Extra instructions for ElectroMagnetic Navigation System Modeling
+The cmag dataset contained in master_feature_matrix_v5.npy first needs to be upsampled to a 16x16x16 grid before being
+used as a dataset in deep-fluids. The preprocess_cmag.py script handles that. This script also splits the data between
+the training set and test set by saving a shuffling a subset of the current indices and saving those for reuse.
+
+Generating the test data is performed using the tester.py script. It requires a path to the model that you would like to
+test. Also make sure to specify if you are using the divergence-free or regular CNN.
+
+    python tester.py --load_model_dir log/cmag_dataset/0304_142438_de_123/
+
+This will generate the test data using the latest model in log/cmag_dataset/0304_142438_de_123
+
+    python tester.py --load_model_dir log/cmag_dataset/0304_142438_de_123/ --use_curl True
+
+This will generate the test data using the latest model in log/cmag_dataset/0304_142438_de_123 assuming that the model
+is a divergence-free one.
+
+The tester script outputs are file with the model.cpkt.test_stats that contains the following information.
+R2_x R2_y R2_z
+RMSE_x RMSE_y RMSE_y
+MAE_x MAE_y MAE_z
+N-MAE_x N-MAE_y N-MAE_z
+
+Where R2_x is the coefficient of determination of the x axis 
+RMSE_x is the mean root mean square error of the x axis
+MAE_x is the mean absolute error of the x axis
+N-MAE_x is the normalized mean absolute error of the x axis
+
+In order to perform the comparative analysis with the other methods, you need to make the tester script output the
+prediction values. Set self.save_output to True in tester.py. This will save the predicted magnetic field values in the 
+test to the path in the save_data_path config variable. 
+
 ## Result (2D)
 
 ### Reconstruction from each parameter after 100 epochs (From top to bottom: position / width / time)
@@ -89,6 +121,8 @@ In each image, the top three rows are velocity profiles, and the rest rows are v
 
 ![random_ae_xy_gt](./asset/random_ae_xy_gt.png) ![random_ae_zy_gt](./asset/random_ae_zy_gt.png)
 
-## Author
+## Authors
 
 [Byungsoo Kim](http://www.byungsoo.me) / [@byungsook](https://github.com/byungsook)
+
+Samuel Charreyron / samuelch@ethz.ch
