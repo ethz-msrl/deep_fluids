@@ -11,7 +11,7 @@ from model import GeneratorBE3
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Converts deep-fluids log folder to a saved model bundle that can be used in \
-    mag_mag_manip')
+    mag_manip')
     parser.add_argument('input_folder', help='path to a folder containing the tensorflow model checkpoints')
     parser.add_argument('model_name', help='the name of the output model')
     parser.add_argument('-o', '--overwrite', action='store_true', help='overwrite the existing model with the same name')
@@ -35,6 +35,7 @@ if __name__ == '__main__':
 
     output_shape = (config.res_x, config.res_y, config.res_z, 3)
 
+    # here we recreate the network so that we can load the checkpoint to it
     z = tf.placeholder(dtype=tf.float32, shape=(1, c_num))
     G_, _ = GeneratorBE3(z, config.filters, output_shape,
                              num_conv=config.num_conv, repeat=config.repeat, reuse=False)
@@ -43,7 +44,10 @@ if __name__ == '__main__':
 
     with tf.Session() as sess:
         tf.train.Saver().restore(sess, model_fn)
-        #loader.restore(sess, model_fn) 
+
+        # here we generate the signature_def of the saved_model which 
+        # essentially defines the properties of the input and output tensors and 
+        # operations of the model
         inputs = {'input': tf.saved_model.utils.build_tensor_info(z)}
         outputs = {'output': tf.saved_model.utils.build_tensor_info(G_)}
 
@@ -52,8 +56,10 @@ if __name__ == '__main__':
                 outputs=outputs,
                 method_name=tf.saved_model.signature_constants.PREDICT_METHOD_NAME)
 
+        # this is the folder in which we will output all the model data
         model_dir = os.path.join('models', args.model_name)
 
+        # if the output folder is not empty, tensorflow complains
         if args.overwrite:
             shutil.rmtree(model_dir)
 
@@ -64,12 +70,13 @@ if __name__ == '__main__':
                     },
                 strip_default_attrs=True)
         builder.save()
-        print('model is saved to', model_dir)
 
     if args.zip:
         shutil.make_archive(os.path.join('models', args.model_name), 'zip', model_dir)
 
-    # export the params metadata file
+    # we also create a YAML file containing metadata that is needed by the tensorflow C API 
+    # to perform inference. Some of these should already be available using the SavedModel API
+    # but it seems that the tensorflow C API is very limited and doesn't give you any SavedModel util functions
     params = {
             'name': args.model_name,
             'num_coils': c_num, 
@@ -97,4 +104,6 @@ if __name__ == '__main__':
 
     with open(os.path.join(model_dir, 'params.yaml'), 'w') as f:
         f.write(yaml.dump(params))
+
+    print('model is saved to', model_dir)
   
