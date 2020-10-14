@@ -46,14 +46,14 @@ np.savetxt(os.path.join(cmag_dir,'idx_test.txt'), idx_test, fmt='%d')
 sampling = True
 res = 16
 args_file = os.path.join(cmag_dir, 'args.txt')
-with open(args_file, 'w') as f:
-    f.write('num_param: 8\n')
-    f.write('min_c: -35\n')
-    f.write('max_c: 35\n')
-    f.write('min_b: %f\n' % bmin)
-    f.write('max_b: %f\n' % bmax)
-    f.write('res: %d\n' % res)
-    f.write('sampling: %d\n' % sampling)
+f = open(args_file, 'w')
+f.write('num_param: 8\n')
+f.write('min_c: -35\n')
+f.write('max_c: 35\n')
+f.write('min_b: %f\n' % bmin)
+f.write('max_b: %f\n' % bmax)
+f.write('res: %d\n' % res)
+f.write('sampling: %d\n' % sampling)
 
 train_dir = os.path.join(cmag_dir, 'v')
 
@@ -72,10 +72,13 @@ if sampling:
         np.amin(data[:nrow,2]),
         np.amax(data[:nrow,2]),
     ]
+    f.write('bbox: {}'.format(bbox))
     px = np.linspace(bbox[0], bbox[1], res) 
     py = np.linspace(bbox[2], bbox[3], res) 
     pz = np.linspace(bbox[4], bbox[5], res) 
     pz_, py_, px_ = np.meshgrid(pz, py, px, indexing='ij')
+
+f.close()
 
 for i in trange(n):
     y = data[i*nrow,3:-3]
