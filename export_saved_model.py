@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('input_folder', help='path to a folder containing the tensorflow model checkpoints')
     parser.add_argument('model_name', help='the name of the output model')
     parser.add_argument('-o', '--overwrite', action='store_true', help='overwrite the existing model with the same name')
-    parser.add_argument('-z', '--zip', action='store_true', help='zip the output folder')
+    parser.add_argument('-t', '--tar', action='store_true', help='tar the output folder')
 
     args = parser.parse_args()
 
@@ -71,9 +71,6 @@ if __name__ == '__main__':
                 strip_default_attrs=True)
         builder.save()
 
-    if args.zip:
-        shutil.make_archive(os.path.join('models', args.model_name), 'zip', model_dir)
-
     # we also create a YAML file containing metadata that is needed by the tensorflow C API 
     # to perform inference. Some of these should already be available using the SavedModel API
     # but it seems that the tensorflow C API is very limited and doesn't give you any SavedModel util functions
@@ -104,6 +101,9 @@ if __name__ == '__main__':
 
     with open(os.path.join(model_dir, 'params.yaml'), 'w') as f:
         f.write(yaml.dump(params))
+
+    if args.tar:
+        shutil.make_archive(os.path.join('models', args.model_name), 'tar', root_dir='models', base_dir=args.model_name)
 
     print('model is saved to', model_dir)
   
